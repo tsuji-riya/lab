@@ -69,3 +69,28 @@ jobs:
       - name: Apply
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: terraform apply -input=false tfplan
+
+      - name: Apply Flux
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        working-directory: .
+        run: |
+          d="$RUNNER_TEMP/kube"
+          mkdir -p "$d"
+          printf '%s' "$TF_VAR_k8s_cluster_ca_certificate" > "$d/ca.crt"
+          printf '%s' "$TF_VAR_k8s_client_certificate" > "$d/client.crt"
+          printf '%s' "$TF_VAR_k8s_client_key" > "$d/client.key"
+          export KUBECONFIG="$d/config"
+          kubectl config set-cluster k3s --server=https://127.0.0.1:6443 --certificate-authority="$d/ca.crt" --embed-certs=true
+          kubectl config set-credentials ci --client-certificate="$d/client.crt" --client-key="$d/client.key" --embed-certs=true
+          kubectl config set-context k3s --cluster=k3s --user=ci
+          kubectl config use-context k3s
+
+          kubectl apply --server-side --force-conflicts -f fluxcd/flux-system/gotk-components.yaml
+          kubectl wait --for=condition=Established crd -l app.kubernetes.io/part-of=flux --timeout=120s
+          kubectl -n flux-system rollout status deployment --timeout=300s
+          kubectl apply --server-side --force-conflicts -k fluxcd/flux-system
+          kubectl apply --server-side --force-conflicts -f fluxcd/infrastructure.yaml -f fluxcd/apps.yaml
+
+          ts="$(date +%s)"
+          kubectl -n flux-system annotate --overwrite gitrepository/flux-system reconcile.fluxcd.io/requestedAt="$ts"
+          kubectl -n flux-system annotate --overwrite kustomization/flux-system kustomization/infrastructure kustomization/apps reconcile.fluxcd.io/requestedAt="$ts"
