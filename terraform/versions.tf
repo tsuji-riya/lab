@@ -17,7 +17,6 @@ terraform {
   }
 
   backend "s3" {
-    bucket                      = "lab"
     key                         = "terraform.tfstate"
     region                      = "auto"
     skip_credentials_validation = true
