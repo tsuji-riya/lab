@@ -15,7 +15,6 @@ spec:
       version: 1.12.1
   install:
     crds: Create
-  suspend: true
   interval: 24h
   upgrade:
     crds: Create

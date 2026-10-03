@@ -4,11 +4,11 @@ metadata:
   name: infrastructure
   namespace: flux-system
 spec:
-  suspend: true
   interval: 24h
   path: ./infrastructure
   prune: true
   wait: true
+  timeout: 15m
   sourceRef:
     kind: GitRepository
     name: flux-system
