@@ -18,3 +18,8 @@ spec:
   interval: 24h
   upgrade:
     crds: Create
+  values:
+    persistence:
+      defaultDiskSelector:
+        enable: true
+        selector: ssd
