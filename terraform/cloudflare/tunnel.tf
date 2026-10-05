@@ -1,3 +1,7 @@
+locals {
+  longhorn_hostname = "longhorn-lab.riya.work"
+}
+
 resource "random_bytes" "tunnel_secret" {
   length = 32
 }
@@ -14,6 +18,10 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "k3s" {
 
   config = {
     ingress = [
+      {
+        hostname = local.longhorn_hostname
+        service  = "http://longhorn-frontend.longhorn-system.svc.cluster.local:80"
+      },
       {
         service = "http_status:404"
       },
