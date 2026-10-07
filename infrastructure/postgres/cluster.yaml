@@ -1,0 +1,32 @@
+# 複数アプリで共有する PostgreSQL クラスタ。アプリごとのロールと DB はここに追加する
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres
+  namespace: postgres
+spec:
+  # 書き込み量は台数に比例するため 2 台(プライマリ + スタンバイ)。非同期レプリケーション
+  instances: 2
+  storage:
+    size: 20Gi
+    storageClass: longhorn-ssd-single
+  managed:
+    roles:
+      - name: gitea
+        ensure: present
+        login: true
+        passwordSecret:
+          name: gitea-db
+  postgresql:
+    parameters:
+      # フルページ書き込みを圧縮して WAL 量を減らす
+      wal_compression: "on"
+      # チェックポイント頻度を下げ、フルページ書き込みの発生回数を減らす
+      checkpoint_timeout: 15min
+      max_wal_size: 2GB
+  affinity:
+    enablePodAntiAffinity: true
+    podAntiAffinityType: required
+    topologyKey: kubernetes.io/hostname
+    nodeSelector:
+      node-role.kubernetes.io/etcd: "true"
