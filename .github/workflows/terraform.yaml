@@ -23,6 +23,8 @@ env:
   TF_VAR_k8s_cluster_ca_certificate: ${{ secrets.K8S_CLUSTER_CA_CERTIFICATE }}
   TF_VAR_k8s_client_certificate: ${{ secrets.K8S_CLIENT_CERTIFICATE }}
   TF_VAR_k8s_client_key: ${{ secrets.K8S_CLIENT_KEY }}
+  TF_VAR_github_oauth_client_id: ${{ secrets.GITEA_GITHUB_CLIENT_ID }}
+  TF_VAR_github_oauth_client_secret: ${{ secrets.GITEA_GITHUB_CLIENT_SECRET }}
 
 jobs:
   terraform:

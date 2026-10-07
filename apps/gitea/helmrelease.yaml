@@ -1,0 +1,73 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: gitea
+  namespace: gitea
+spec:
+  chart:
+    spec:
+      chart: gitea
+      reconcileStrategy: ChartVersion
+      sourceRef:
+        kind: HelmRepository
+        name: gitea
+      version: 12.7.0
+  interval: 24h
+  values:
+    # RWO PVC なので更新時は旧 Pod を先に止める
+    strategy:
+      type: Recreate
+    replicaCount: 1
+    persistence:
+      enabled: true
+      storageClass: longhorn-hdd
+      accessModes:
+        - ReadWriteOnce
+      size: 50Gi
+    # 同梱の PostgreSQL / Valkey は使わず、DB は共有 CNPG クラスタ(postgres)を使う。
+    # セッション・キャッシュ・キューは内蔵実装にする
+    postgresql:
+      enabled: false
+    postgresql-ha:
+      enabled: false
+    valkey:
+      enabled: false
+    valkey-cluster:
+      enabled: false
+    gitea:
+      # 管理者はローカルアカウントで作成し、ログイン後に GitHub アカウントを連携する
+      admin:
+        username: riya
+        email: tsuji.riya@gmail.com
+        existingSecret: gitea-admin
+        passwordMode: initialOnlyNoReset
+      oauth:
+        - name: github
+          provider: github
+          existingSecret: gitea-oauth-github
+      additionalConfigFromEnvs:
+        - name: GITEA__DATABASE__PASSWD
+          valueFrom:
+            secretKeyRef:
+              name: gitea-db
+              key: password
+      config:
+        database:
+          DB_TYPE: postgres
+          HOST: postgres-rw.postgres.svc.cluster.local:5432
+          NAME: gitea
+          USER: gitea
+        server:
+          DOMAIN: gitea.riya.work
+          ROOT_URL: https://gitea.riya.work/
+        # 新規登録は無効。他のユーザーは公開リポジトリの閲覧のみ(未ログインで可)
+        service:
+          DISABLE_REGISTRATION: true
+          REQUIRE_SIGNIN_VIEW: false
+        session:
+          PROVIDER: memory
+        cache:
+          ADAPTER: memory
+        queue:
+          TYPE: level

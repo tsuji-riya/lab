@@ -1,0 +1,14 @@
+# CNPG が自前でレプリケーションするため、Longhorn 側は 1 レプリカにして書き込みの二重化を避ける
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: longhorn-ssd-single
+provisioner: driver.longhorn.io
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+parameters:
+  numberOfReplicas: "1"
+  staleReplicaTimeout: "30"
+  diskSelector: ssd
+  dataLocality: strict-local
