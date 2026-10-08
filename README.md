@@ -37,7 +37,7 @@ flowchart TB
 
     subgraph CF["☁️ Cloudflare"]
         r2[("🪣 R2<br/>tfstate")]
-        dns["DNS<br/>gitea / longhorn-lab"]
+        dns["DNS<br/>gitea / longhorn-lab / headlamp"]
         access["🛡️ Zero Trust Access<br/>owner-only"]
         tunnel{{"🚇 Tunnel: k3s"}}
     end
@@ -81,6 +81,10 @@ flowchart TB
         subgraph NS_GITEA["ns: gitea"]
             gitea["🍵 Gitea"]
         end
+
+        subgraph NS_HL["ns: headlamp"]
+            headlamp["🔦 Headlamp"]
+        end
     end
 
     user -- "git push" --> repo
@@ -97,6 +101,7 @@ flowchart TB
     ks_infra --> cfd
     ks_pg --> pgp
     ks_apps --> gitea
+    ks_apps --> headlamp
 
     cnpg -- "管理" --> pgp
     pgp == "非同期レプリケーション" ==> pgs
@@ -112,6 +117,7 @@ flowchart TB
     gitea -. "ログイン連携" .-> oauth
 
     user -- "longhorn-lab.riya.work" --> access
+    user -- "headlamp.riya.work" --> access
     user -- "gitea.riya.work" --> dns
     visitor -- "gitea.riya.work" --> dns
     access --> dns
@@ -119,6 +125,8 @@ flowchart TB
     tunnel == "outbound 接続" ==> cfd
     cfd -- ":3000" --> gitea
     cfd -- ":80" --> lh
+    cfd -- ":80" --> headlamp
+    headlamp -- "k8s API" --> api
 ```
 
 ---
@@ -134,8 +142,9 @@ flowchart TB
 | ストレージ | Longhorn `1.12.1` | SSD / HDD の分散ブロックストレージ |
 | データベース | CloudNativePG `0.29.1` | 共有 PostgreSQL クラスタ |
 | 公開経路 | Cloudflare Tunnel (`cloudflared` x2) | ポート開放なしで外部公開 |
-| 認証 | Cloudflare Access | Longhorn UI を自分だけに制限 |
+| 認証 | Cloudflare Access | Longhorn UI / Headlamp を自分だけに制限 |
 | アプリ | Gitea (chart `12.7.0`) | セルフホストの Git サービス |
+| アプリ | Headlamp (chart `0.45.0`) | Kubernetes の Web UI |
 
 ---
 
@@ -145,6 +154,7 @@ flowchart TB
 | --- | --- | --- |
 | `gitea.riya.work` | `gitea-http.gitea:3000` | 未ログインで公開リポジトリを閲覧可。新規登録は無効 |
 | `longhorn-lab.riya.work` | `longhorn-frontend.longhorn-system:80` | Cloudflare Access (`owner-only`) |
+| `headlamp.riya.work` | `headlamp.headlamp:80` | Cloudflare Access (`owner-only`) + ServiceAccount トークンでログイン |
 | `lab-k3s-api.riya.work` | k3s API `:6443` | CI が Access のサービストークン経由で利用 |
 
 ---
@@ -199,7 +209,7 @@ sequenceDiagram
 ```mermaid
 flowchart LR
     a["infrastructure<br/>Longhorn / CNPG / cloudflared"] --> b["postgres<br/>Cluster / Database"]
-    a --> c["apps<br/>Gitea"]
+    a --> c["apps<br/>Gitea / Headlamp"]
     b --> c
 ```
 
@@ -223,7 +233,8 @@ lab
 │   ├── postgres/                      # 共有 PostgreSQL クラスタ
 │   └── cloudflare/                    # cloudflared Deployment
 ├── apps/
-│   └── gitea/                         # Gitea HelmRelease
+│   ├── gitea/                         # Gitea HelmRelease
+│   └── headlamp/                      # Headlamp HelmRelease
 └── terraform/
     ├── cloudflare/                    # Tunnel / DNS / Access
     ├── kubernetes.tf                  # Namespace と Secret

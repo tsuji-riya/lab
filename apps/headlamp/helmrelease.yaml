@@ -1,0 +1,22 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: headlamp
+  namespace: headlamp
+spec:
+  chart:
+    spec:
+      chart: headlamp
+      reconcileStrategy: ChartVersion
+      sourceRef:
+        kind: HelmRepository
+        name: headlamp
+      version: 0.45.0
+  interval: 24h
+  values:
+    config:
+      # OIDC は使わない(ログインは ServiceAccount のトークンで行う)
+      oidc:
+        secret:
+          create: false
