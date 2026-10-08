@@ -61,6 +61,10 @@ spec:
         server:
           DOMAIN: gitea.riya.work
           ROOT_URL: https://gitea.riya.work/
+          # SSH は Cloudflare Tunnel 経由(クライアントは cloudflared access ssh が必要)。
+          # 内蔵 SSH サーバーは Pod 内の 2222、Service(gitea-ssh)は 22 で受ける
+          SSH_DOMAIN: gitea-ssh.riya.work
+          SSH_PORT: 22
         # 新規登録は無効。他のユーザーは公開リポジトリの閲覧のみ(未ログインで可)
         service:
           DISABLE_REGISTRATION: true
