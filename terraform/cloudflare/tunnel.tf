@@ -1,6 +1,7 @@
 locals {
   longhorn_hostname = "longhorn-lab.riya.work"
   gitea_hostname    = "gitea.riya.work"
+  headlamp_hostname = "headlamp.riya.work"
 }
 
 resource "random_bytes" "tunnel_secret" {
@@ -26,6 +27,10 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "k3s" {
       {
         hostname = local.gitea_hostname
         service  = "http://gitea-http.gitea.svc.cluster.local:3000"
+      },
+      {
+        hostname = local.headlamp_hostname
+        service  = "http://headlamp.headlamp.svc.cluster.local:80"
       },
       {
         service = "http_status:404"

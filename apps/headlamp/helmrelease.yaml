@@ -1,0 +1,28 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: headlamp
+  namespace: headlamp
+spec:
+  chart:
+    spec:
+      chart: headlamp
+      reconcileStrategy: ChartVersion
+      sourceRef:
+        kind: HelmRepository
+        name: headlamp
+      version: 0.45.0
+  interval: 24h
+  values:
+    config:
+      # ログイン画面を出さず、全員を Pod の ServiceAccount として扱う。
+      # 認証は手前の Cloudflare Access (owner-only) に任せる
+      unsafeUseServiceAccountToken: true
+      oidc:
+        secret:
+          create: false
+    # 閲覧専用にする。組み込みの view (Secret は見えない) に加えて
+    # clusterrole.yaml でクラスタスコープのリソースと CRD の読み取りを足す
+    clusterRoleBinding:
+      clusterRoleName: view
