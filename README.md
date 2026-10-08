@@ -154,7 +154,7 @@ flowchart TB
 | --- | --- | --- |
 | `gitea.riya.work` | `gitea-http.gitea:3000` | 未ログインで公開リポジトリを閲覧可。新規登録は無効 |
 | `longhorn-lab.riya.work` | `longhorn-frontend.longhorn-system:80` | Cloudflare Access (`owner-only`) |
-| `headlamp.riya.work` | `headlamp.headlamp:80` | Cloudflare Access (`owner-only`) + ServiceAccount トークンでログイン |
+| `headlamp.riya.work` | `headlamp.headlamp:80` | Cloudflare Access (`owner-only`)。ログイン不要の閲覧専用 (Secret は見えない) |
 | `lab-k3s-api.riya.work` | k3s API `:6443` | CI が Access のサービストークン経由で利用 |
 
 ---
