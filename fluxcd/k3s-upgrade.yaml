@@ -1,0 +1,17 @@
+# Plan の CRD は infrastructure の system-upgrade-controller が入れるため、Plan は別の Kustomization にして後から適用する
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: k3s-upgrade
+  namespace: flux-system
+spec:
+  interval: 24h
+  path: ./infrastructure/k3s-upgrade
+  prune: true
+  wait: true
+  timeout: 15m
+  dependsOn:
+    - name: infrastructure
+  sourceRef:
+    kind: GitRepository
+    name: flux-system

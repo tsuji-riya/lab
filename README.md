@@ -226,11 +226,14 @@ lab
 │   ├── flux-system/
 │   ├── infrastructure.yaml
 │   ├── postgres.yaml
+│   ├── k3s-upgrade.yaml
 │   └── apps.yaml
 ├── infrastructure/                    # 基盤コンポーネント
 │   ├── longhorn/                      # ストレージと StorageClass
 │   ├── cnpg/                          # CloudNativePG operator
 │   ├── postgres/                      # 共有 PostgreSQL クラスタ
+│   ├── system-upgrade-controller/     # k3s 自動アップグレードの controller
+│   ├── k3s-upgrade/                   # k3s の Plan(stable チャンネル追従)
 │   └── cloudflare/                    # cloudflared Deployment
 ├── apps/
 │   ├── gitea/                         # Gitea HelmRelease
