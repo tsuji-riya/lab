@@ -4,3 +4,4 @@ resources:
 - longhorn
 - cloudflare
 - cnpg
+- system-upgrade-controller
