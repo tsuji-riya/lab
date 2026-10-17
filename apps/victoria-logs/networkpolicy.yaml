@@ -1,0 +1,16 @@
+# VictoriaLogs には認証がないので、cloudflared と同じ namespace の Vector からだけ受け付ける
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cloudflared-and-vector
+  namespace: victoria-logs
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cloudflare
+        - podSelector: {}

@@ -37,7 +37,7 @@ flowchart TB
 
     subgraph CF["☁️ Cloudflare"]
         r2[("🪣 R2<br/>tfstate")]
-        dns["DNS<br/>gitea / longhorn-lab / headlamp"]
+        dns["DNS<br/>gitea / longhorn-lab / headlamp / logs"]
         access["🛡️ Zero Trust Access<br/>owner-only"]
         tunnel{{"🚇 Tunnel: k3s"}}
     end
@@ -85,6 +85,11 @@ flowchart TB
         subgraph NS_HL["ns: headlamp"]
             headlamp["🔦 Headlamp"]
         end
+
+        subgraph NS_VL["ns: victoria-logs"]
+            vlogs[("📜 VictoriaLogs")]
+            vector["Vector<br/>DaemonSet (全ノード)"]
+        end
     end
 
     user -- "git push" --> repo
@@ -102,6 +107,8 @@ flowchart TB
     ks_pg --> pgp
     ks_apps --> gitea
     ks_apps --> headlamp
+    ks_apps --> vlogs
+    vector -- "Pod ログ / journald" --> vlogs
 
     cnpg -- "管理" --> pgp
     pgp == "非同期レプリケーション" ==> pgs
@@ -118,6 +125,7 @@ flowchart TB
 
     user -- "longhorn-lab.riya.work" --> access
     user -- "headlamp.riya.work" --> access
+    user -- "logs.riya.work" --> access
     user -- "gitea.riya.work" --> dns
     visitor -- "gitea.riya.work" --> dns
     access --> dns
@@ -126,6 +134,7 @@ flowchart TB
     cfd -- ":3000" --> gitea
     cfd -- ":80" --> lh
     cfd -- ":80" --> headlamp
+    cfd -- ":9428" --> vlogs
     headlamp -- "k8s API" --> api
 ```
 
@@ -142,9 +151,10 @@ flowchart TB
 | ストレージ | Longhorn `1.12.1` | SSD / HDD の分散ブロックストレージ |
 | データベース | CloudNativePG `0.29.1` | 共有 PostgreSQL クラスタ |
 | 公開経路 | Cloudflare Tunnel (`cloudflared` x2) | ポート開放なしで外部公開 |
-| 認証 | Cloudflare Access | Longhorn UI / Headlamp を自分だけに制限 |
+| 認証 | Cloudflare Access | Longhorn UI / Headlamp / VictoriaLogs を自分だけに制限 |
 | アプリ | Gitea (chart `12.7.0`) | セルフホストの Git サービス |
 | アプリ | Headlamp (chart `0.45.0`) | Kubernetes の Web UI |
+| アプリ | VictoriaLogs (chart `0.13.10`) + Vector | ログの収集と Web UI |
 
 ---
 
@@ -155,6 +165,7 @@ flowchart TB
 | `gitea.riya.work` | `gitea-http.gitea:3000` | 未ログインで公開リポジトリを閲覧可。新規登録は無効 |
 | `longhorn-lab.riya.work` | `longhorn-frontend.longhorn-system:80` | Cloudflare Access (`owner-only`) |
 | `headlamp.riya.work` | `headlamp.headlamp:80` | Cloudflare Access (`owner-only`)。ログイン不要の閲覧専用 (Secret は見えない) |
+| `logs.riya.work` | `victoria-logs-victoria-logs-single-server.victoria-logs:9428` | Cloudflare Access (`owner-only`) |
 | `lab-k3s-api.riya.work` | k3s API `:6443` | CI が Access のサービストークン経由で利用 |
 
 ---
@@ -176,6 +187,29 @@ Longhorn のデフォルトディスクは `ssd` のものだけに絞ってい�
 - Pod Anti-Affinity で別ノードに分散し、`etcd` ロールのノードに配置します
 - `wal_compression` と `checkpoint_timeout: 15min` で WAL の量を抑えます
 - アプリごとのロールと DB は `infrastructure/postgres/` に追加します (今は `gitea` のみ)
+
+---
+
+## 📜 ログを見る
+
+[logs.riya.work/select/vmui/](https://logs.riya.work/select/vmui/) を開き、上の欄にクエリを入れて実行します。
+各ノードの Vector が Pod のログと journald(dmesg・k3s を含む)を送っています。
+保存先は emptyDir なので、VictoriaLogs の Pod が再起動するとログは消えます(最大 7 日 / 5GiB)。
+
+| 見たいもの | クエリ |
+| --- | --- |
+| dmesg(カーネル) | `SYSLOG_IDENTIFIER:=kernel` |
+| k3s(server) | `_SYSTEMD_UNIT:="k3s.service"` |
+| k3s-agent | `_SYSTEMD_UNIT:="k3s-agent.service"` |
+| 特定ノードだけ | `host:=node4 SYSLOG_IDENTIFIER:=kernel` |
+| namespace の Pod ログ | `kubernetes.pod_namespace:=gitea` |
+| Pod 名で絞る | `kubernetes.pod_name:gitea*` |
+| エラーっぽい行 | `kubernetes.pod_namespace:=postgres error` |
+| 全部 | `*` |
+
+- 空白区切りで AND になります。`or` / `not` も使えます
+- 時間範囲は右上で変えます
+- k3s を OpenRC で入れたノードの `/var/log/k3s.log` は `file:="/var/log/k3s.log"` で出ます
 
 ---
 
@@ -209,7 +243,7 @@ sequenceDiagram
 ```mermaid
 flowchart LR
     a["infrastructure<br/>Longhorn / CNPG / cloudflared"] --> b["postgres<br/>Cluster / Database"]
-    a --> c["apps<br/>Gitea / Headlamp"]
+    a --> c["apps<br/>Gitea / Headlamp / VictoriaLogs"]
     b --> c
 ```
 
@@ -237,7 +271,8 @@ lab
 │   └── cloudflare/                    # cloudflared Deployment
 ├── apps/
 │   ├── gitea/                         # Gitea HelmRelease
-│   └── headlamp/                      # Headlamp HelmRelease
+│   ├── headlamp/                      # Headlamp HelmRelease
+│   └── victoria-logs/                 # VictoriaLogs + Vector(ログ)
 └── terraform/
     ├── cloudflare/                    # Tunnel / DNS / Access
     ├── kubernetes.tf                  # Namespace と Secret

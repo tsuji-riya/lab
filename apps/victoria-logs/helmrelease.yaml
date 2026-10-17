@@ -1,0 +1,62 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: victoria-logs
+  namespace: victoria-logs
+spec:
+  chart:
+    spec:
+      chart: victoria-logs-single
+      reconcileStrategy: ChartVersion
+      sourceRef:
+        kind: HelmRepository
+        name: victoria-metrics
+      version: 0.13.10
+  interval: 24h
+  values:
+    server:
+      # 見るためだけのログなので永続化しない。Pod が再起動すると消える
+      persistentVolume:
+        enabled: false
+      retentionPeriod: 7d
+      retentionDiskSpaceUsage: 5
+    # 各ノードに Vector を DaemonSet で置き、Pod のログ・journald・k3s のログファイルを送る
+    vector:
+      enabled: true
+      # journald を読むのに journalctl が要るので distroless ではなく debian 版を使う
+      image:
+        base: debian
+      extraVolumes:
+        - name: run-journal
+          hostPath:
+            path: /run/log/journal
+        - name: machine-id
+          hostPath:
+            path: /etc/machine-id
+            type: File
+      extraVolumeMounts:
+        # 永続 journal (/var/log/journal) はチャート既定の /var/log マウントで見える
+        - name: run-journal
+          mountPath: /run/log/journal
+          readOnly: true
+        # journalctl はホストの machine-id のディレクトリを読むため
+        - name: machine-id
+          mountPath: /etc/machine-id
+          readOnly: true
+      customConfig:
+        sources:
+          # dmesg(カーネル)・k3s.service・k3s-agent.service などノードの journald 全部
+          journal:
+            type: journald
+          # OpenRC で入れた k3s はファイルに書く。systemd の場合は存在しないだけ
+          k3s_files:
+            type: file
+            include:
+              - /var/log/k3s.log
+              - /var/log/k3s-agent.log
+        sinks:
+          vlogs:
+            inputs: [parser, journal, k3s_files]
+            request:
+              headers:
+                VL-Stream-Fields: stream,kubernetes.pod_name,kubernetes.container_name,kubernetes.pod_namespace,host,_SYSTEMD_UNIT,SYSLOG_IDENTIFIER,file

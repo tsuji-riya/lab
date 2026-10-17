@@ -3,6 +3,7 @@ locals {
   gitea_hostname     = "gitea.riya.work"
   gitea_ssh_hostname = "gitea-ssh.riya.work"
   headlamp_hostname  = "headlamp.riya.work"
+  logs_hostname      = "logs.riya.work"
 }
 
 resource "random_bytes" "tunnel_secret" {
@@ -36,6 +37,10 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "k3s" {
       {
         hostname = local.headlamp_hostname
         service  = "http://headlamp.headlamp.svc.cluster.local:80"
+      },
+      {
+        hostname = local.logs_hostname
+        service  = "http://victoria-logs-victoria-logs-single-server.victoria-logs.svc.cluster.local:9428"
       },
       {
         service = "http_status:404"
