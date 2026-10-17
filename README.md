@@ -108,7 +108,7 @@ flowchart TB
     ks_apps --> gitea
     ks_apps --> headlamp
     ks_apps --> vlogs
-    vector -- "Pod ログ / journald" --> vlogs
+    vector -- "Pod ログ / dmesg / k3s.log" --> vlogs
 
     cnpg -- "管理" --> pgp
     pgp == "非同期レプリケーション" ==> pgs
@@ -193,15 +193,15 @@ Longhorn のデフォルトディスクは `ssd` のものだけに絞ってい�
 ## 📜 ログを見る
 
 [logs.riya.work/select/vmui/](https://logs.riya.work/select/vmui/) を開き、上の欄にクエリを入れて実行します。
-各ノードの Vector が Pod のログと journald(dmesg・k3s を含む)を送っています。
+各ノードの Vector が Pod のログ・dmesg・`/var/log/k3s.log`・`/var/log/k3s-agent.log` を送っています。
 保存先は emptyDir なので、VictoriaLogs の Pod が再起動するとログは消えます(最大 7 日 / 5GiB)。
 
 | 見たいもの | クエリ |
 | --- | --- |
-| dmesg(カーネル) | `SYSLOG_IDENTIFIER:=kernel` |
-| k3s(server) | `_SYSTEMD_UNIT:="k3s.service"` |
-| k3s-agent | `_SYSTEMD_UNIT:="k3s-agent.service"` |
-| 特定ノードだけ | `host:=node4 SYSLOG_IDENTIFIER:=kernel` |
+| dmesg(カーネル) | `source:=dmesg` |
+| k3s(server) | `source:="/var/log/k3s.log"` |
+| k3s-agent | `source:="/var/log/k3s-agent.log"` |
+| 特定ノードだけ | `host:=node4 source:=dmesg` |
 | namespace の Pod ログ | `kubernetes.pod_namespace:=gitea` |
 | Pod 名で絞る | `kubernetes.pod_name:gitea*` |
 | エラーっぽい行 | `kubernetes.pod_namespace:=postgres error` |
@@ -209,7 +209,7 @@ Longhorn のデフォルトディスクは `ssd` のものだけに絞ってい�
 
 - 空白区切りで AND になります。`or` / `not` も使えます
 - 時間範囲は右上で変えます
-- k3s を OpenRC で入れたノードの `/var/log/k3s.log` は `file:="/var/log/k3s.log"` で出ます
+- dmesg は Vector が再起動すると同じ行がもう一度入ります
 
 ---
 

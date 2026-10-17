@@ -20,43 +20,39 @@ spec:
         enabled: false
       retentionPeriod: 7d
       retentionDiskSpaceUsage: 5
-    # 各ノードに Vector を DaemonSet で置き、Pod のログ・journald・k3s のログファイルを送る
+    # 各ノードに Vector を DaemonSet で置き、Pod のログ・dmesg・k3s のログファイルを送る
     vector:
       enabled: true
-      # journald を読むのに journalctl が要るので distroless ではなく debian 版を使う
+      # dmesg コマンドが要るので distroless ではなく debian 版を使う
       image:
         base: debian
-      extraVolumes:
-        - name: run-journal
-          hostPath:
-            path: /run/log/journal
-        - name: machine-id
-          hostPath:
-            path: /etc/machine-id
-            type: File
-      extraVolumeMounts:
-        # 永続 journal (/var/log/journal) はチャート既定の /var/log マウントで見える
-        - name: run-journal
-          mountPath: /run/log/journal
-          readOnly: true
-        # journalctl はホストの machine-id のディレクトリを読むため
-        - name: machine-id
-          mountPath: /etc/machine-id
-          readOnly: true
+      # /dev/kmsg(dmesg)を読むため。Alpine は journald がないので直接読む
+      securityContext:
+        privileged: true
       customConfig:
         sources:
-          # dmesg(カーネル)・k3s.service・k3s-agent.service などノードの journald 全部
-          journal:
-            type: journald
-          # OpenRC で入れた k3s はファイルに書く。systemd の場合は存在しないだけ
+          # shortcut: Vector が再起動するとリングバッファ全体をもう一度送るので重複する
+          dmesg:
+            type: exec
+            mode: streaming
+            command: [dmesg, --follow, --time-format=iso]
+          # OpenRC の k3s はここに書く(server と agent で片方だけある)
           k3s_files:
             type: file
             include:
               - /var/log/k3s.log
               - /var/log/k3s-agent.log
+        transforms:
+          # exec / file の host は Vector の Pod 名になるのでノード名に差し替える
+          node:
+            type: remap
+            inputs: [dmesg, k3s_files]
+            source: |
+              .host = get_env_var!("VECTOR_SELF_NODE_NAME")
+              .source = .file || "dmesg"
         sinks:
           vlogs:
-            inputs: [parser, journal, k3s_files]
+            inputs: [parser, node]
             request:
               headers:
-                VL-Stream-Fields: stream,kubernetes.pod_name,kubernetes.container_name,kubernetes.pod_namespace,host,_SYSTEMD_UNIT,SYSLOG_IDENTIFIER,file
+                VL-Stream-Fields: stream,kubernetes.pod_name,kubernetes.container_name,kubernetes.pod_namespace,host,source
