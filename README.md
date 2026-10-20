@@ -200,7 +200,7 @@ CNPG の CRD は `infrastructure` の HelmRelease が入れるため、`Cluster`
 
 ```text
 lab
-├── .github/workflows/terraform.yaml   # CI: plan / apply / Flux 適用
+├── .github/workflows/deploy.yaml      # CI: plan / apply / Flux 適用
 ├── fluxcd/                            # Flux 本体と Kustomization 定義
 │   ├── flux-system/
 │   ├── infrastructure.yaml

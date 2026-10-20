@@ -1,18 +1,18 @@
-name: terraform
+name: deploy
 
 on:
   pull_request:
-    paths: [terraform/**, fluxcd/**, infrastructure/**, apps/**, .github/workflows/terraform.yaml]
+    paths: [terraform/**, fluxcd/**, infrastructure/**, apps/**, .github/workflows/deploy.yaml]
   push:
     branches: [main]
-    paths: [terraform/**, fluxcd/**, infrastructure/**, apps/**, .github/workflows/terraform.yaml]
+    paths: [terraform/**, fluxcd/**, infrastructure/**, apps/**, .github/workflows/deploy.yaml]
 
 permissions:
   contents: read
   pull-requests: read
 
 concurrency:
-  group: terraform
+  group: deploy
   cancel-in-progress: false
 
 env:
@@ -25,7 +25,7 @@ env:
   TF_VAR_k8s_client_key: ${{ secrets.K8S_CLIENT_KEY }}
 
 jobs:
-  terraform:
+  deploy:
     runs-on: ubuntu-latest
     defaults:
       run:
