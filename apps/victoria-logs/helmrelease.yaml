@@ -1,0 +1,58 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: victoria-logs
+  namespace: victoria-logs
+spec:
+  chart:
+    spec:
+      chart: victoria-logs-single
+      reconcileStrategy: ChartVersion
+      sourceRef:
+        kind: HelmRepository
+        name: victoria-metrics
+      version: 0.13.10
+  interval: 24h
+  values:
+    server:
+      # 見るためだけのログなので永続化しない。Pod が再起動すると消える
+      persistentVolume:
+        enabled: false
+      retentionPeriod: 7d
+      retentionDiskSpaceUsage: 5
+    # 各ノードに Vector を DaemonSet で置き、Pod のログ・dmesg・k3s のログファイルを送る
+    vector:
+      enabled: true
+      # dmesg コマンドが要るので distroless ではなく debian 版を使う
+      image:
+        base: debian
+      # /dev/kmsg(dmesg)を読むため。Alpine は journald がないので直接読む
+      securityContext:
+        privileged: true
+      customConfig:
+        sources:
+          # shortcut: Vector が再起動するとリングバッファ全体をもう一度送るので重複する
+          dmesg:
+            type: exec
+            mode: streaming
+            command: [dmesg, --follow, --time-format=iso]
+          # OpenRC の k3s はここに書く(server と agent で片方だけある)
+          k3s_files:
+            type: file
+            include:
+              - /var/log/k3s.log
+              - /var/log/k3s-agent.log
+        transforms:
+          # exec / file の host は Vector の Pod 名になるのでノード名に差し替える
+          node:
+            type: remap
+            inputs: [dmesg, k3s_files]
+            source: |
+              .host = get_env_var!("VECTOR_SELF_NODE_NAME")
+              .source = .file || "dmesg"
+        sinks:
+          vlogs:
+            inputs: [parser, node]
+            request:
+              headers:
+                VL-Stream-Fields: stream,kubernetes.pod_name,kubernetes.container_name,kubernetes.pod_namespace,host,source

@@ -34,7 +34,7 @@ flowchart TB
 
     subgraph CF["☁️ Cloudflare"]
         r2[("🪣 R2<br/>tfstate")]
-        dns["DNS<br/>longhorn / headlamp"]
+        dns["DNS<br/>longhorn / headlamp / logs"]
         access["🛡️ Zero Trust Access<br/>owner-only"]
         tunnel{{"🚇 Tunnel: k3s"}}
     end
@@ -77,6 +77,11 @@ flowchart TB
         subgraph NS_HL["ns: headlamp"]
             headlamp["🔦 Headlamp"]
         end
+
+        subgraph NS_VL["ns: victoria-logs"]
+            vlogs[("📜 VictoriaLogs")]
+            vector["Vector<br/>DaemonSet (全ノード)"]
+        end
     end
 
     user -- "git push" --> repo
@@ -93,6 +98,8 @@ flowchart TB
     ks_infra --> cfd
     ks_pg --> pgp
     ks_apps --> headlamp
+    ks_apps --> vlogs
+    vector -- "Pod ログ / dmesg / k3s.log" --> vlogs
 
     cnpg -- "管理" --> pgp
     pgp == "非同期レプリケーション" ==> pgs
@@ -103,11 +110,13 @@ flowchart TB
 
     user -- "longhorn.riya.work" --> access
     user -- "headlamp.riya.work" --> access
+    user -- "logs.riya.work" --> access
     access --> dns
     dns --> tunnel
     tunnel == "outbound 接続" ==> cfd
     cfd -- ":80" --> lh
     cfd -- ":80" --> headlamp
+    cfd -- ":9428" --> vlogs
     headlamp -- "k8s API" --> api
 ```
 
@@ -124,8 +133,9 @@ flowchart TB
 | ストレージ | Longhorn `1.12.1` | SSD の分散ブロックストレージ |
 | データベース | CloudNativePG `0.29.1` | 共有 PostgreSQL クラスタ |
 | 公開経路 | Cloudflare Tunnel (`cloudflared` x2) | ポート開放なしで外部公開 |
-| 認証 | Cloudflare Access | Longhorn UI / Headlamp を自分だけに制限 |
+| 認証 | Cloudflare Access | Longhorn UI / Headlamp / VictoriaLogs を自分だけに制限 |
 | アプリ | Headlamp (chart `0.45.0`) | Kubernetes の Web UI |
+| アプリ | VictoriaLogs (chart `0.13.10`) + Vector | ログの収集と Web UI |
 
 ---
 
@@ -135,6 +145,7 @@ flowchart TB
 | --- | --- | --- |
 | `longhorn.riya.work` | `longhorn-frontend.longhorn-system:80` | Cloudflare Access (`owner-only`) |
 | `headlamp.riya.work` | `headlamp.headlamp:80` | Cloudflare Access (`owner-only`)。ログイン不要の閲覧専用 (Secret は見えない) |
+| `logs.riya.work` | `victoria-logs-victoria-logs-single-server.victoria-logs:9428` | Cloudflare Access (`owner-only`) |
 | `lab-k3s-api.riya.work` | k3s API `:6443` | CI が Access のサービストークン経由で利用 |
 
 ---
@@ -155,6 +166,29 @@ Longhorn のデフォルトディスクは `ssd` のものだけに絞ってい�
 - Pod Anti-Affinity で別ノードに分散し、`etcd` ロールのノードに配置します
 - `wal_compression` と `checkpoint_timeout: 15min` で WAL の量を抑えます
 - アプリごとのロールと DB は `infrastructure/postgres/` に追加します (今はまだありません)
+
+---
+
+## 📜 ログを見る
+
+[logs.riya.work/select/vmui/](https://logs.riya.work/select/vmui/) を開き、上の欄にクエリを入れて実行します。
+各ノードの Vector が Pod のログ・dmesg・`/var/log/k3s.log`・`/var/log/k3s-agent.log` を送っています。
+保存先は emptyDir なので、VictoriaLogs の Pod が再起動するとログは消えます(最大 7 日 / 5GiB)。
+
+| 見たいもの | クエリ |
+| --- | --- |
+| dmesg(カーネル) | `source:=dmesg` |
+| k3s(server) | `source:="/var/log/k3s.log"` |
+| k3s-agent | `source:="/var/log/k3s-agent.log"` |
+| 特定ノードだけ | `host:=node4 source:=dmesg` |
+| namespace の Pod ログ | `kubernetes.pod_namespace:=headlamp` |
+| Pod 名で絞る | `kubernetes.pod_name:postgres*` |
+| エラーっぽい行 | `kubernetes.pod_namespace:=postgres error` |
+| 全部 | `*` |
+
+- 空白区切りで AND になります。`or` / `not` も使えます
+- 時間範囲は右上で変えます
+- dmesg は Vector が再起動すると同じ行がもう一度入ります
 
 ---
 
@@ -188,7 +222,7 @@ sequenceDiagram
 ```mermaid
 flowchart LR
     a["infrastructure<br/>Longhorn / CNPG / cloudflared"] --> b["postgres<br/>Cluster / Database"]
-    a --> c["apps<br/>Headlamp"]
+    a --> c["apps<br/>Headlamp / VictoriaLogs"]
     b --> c
 ```
 
@@ -215,7 +249,8 @@ lab
 │   ├── k3s-upgrade/                   # k3s の Plan(stable チャンネル追従)
 │   └── cloudflare/                    # cloudflared Deployment
 ├── apps/
-│   └── headlamp/                      # Headlamp HelmRelease
+│   ├── headlamp/                      # Headlamp HelmRelease
+│   └── victoria-logs/                 # VictoriaLogs + Vector(ログ)
 └── terraform/
     ├── cloudflare/                    # Tunnel / DNS / Access
     ├── kubernetes.tf                  # Namespace と Secret
