@@ -4,5 +4,4 @@ resources:
 - namespace.yaml
 - helmrepository.yaml
 - helmrelease.yaml
-- storageclass-hdd.yaml
 - storageclass-ssd-single.yaml
