@@ -10,13 +10,6 @@ spec:
   storage:
     size: 20Gi
     storageClass: longhorn-ssd-single
-  managed:
-    roles:
-      - name: gitea
-        ensure: present
-        login: true
-        passwordSecret:
-          name: gitea-db
   postgresql:
     parameters:
       # フルページ書き込みを圧縮して WAL 量を減らす
