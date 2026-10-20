@@ -234,7 +234,9 @@ CNPG の CRD は `infrastructure` の HelmRelease が入れるため、`Cluster`
 
 ```text
 lab
-├── .github/workflows/deploy.yaml      # CI: plan / apply / Flux 適用
+├── .github/
+│   ├── workflows/deploy.yaml          # CI: plan / apply / Flux 適用
+│   └── dependabot.yml                 # cloudflared イメージの更新 PR
 ├── fluxcd/                            # Flux 本体と Kustomization 定義
 │   ├── flux-system/
 │   ├── infrastructure.yaml
@@ -247,11 +249,10 @@ lab
 │   ├── postgres/                      # 共有 PostgreSQL クラスタ
 │   ├── system-upgrade-controller/     # k3s 自動アップグレードの controller
 │   ├── k3s-upgrade/                   # k3s の Plan(stable チャンネル追従)
-│   └── cloudflare/                    # cloudflared Deployment(Renovate で自動更新)
+│   └── cloudflare/                    # cloudflared Deployment(Dependabot で更新 PR)
 ├── apps/
 │   ├── headlamp/                      # Headlamp HelmRelease
 │   └── victoria-logs/                 # VictoriaLogs + Vector(ログ)
-├── renovate.json                      # cloudflared イメージの自動更新
 └── terraform/
     ├── cloudflare/                    # Tunnel / DNS / Access
     ├── kubernetes.tf                  # Namespace と Secret
