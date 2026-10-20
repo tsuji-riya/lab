@@ -247,10 +247,11 @@ lab
 │   ├── postgres/                      # 共有 PostgreSQL クラスタ
 │   ├── system-upgrade-controller/     # k3s 自動アップグレードの controller
 │   ├── k3s-upgrade/                   # k3s の Plan(stable チャンネル追従)
-│   └── cloudflare/                    # cloudflared Deployment
+│   └── cloudflare/                    # cloudflared Deployment(Renovate で自動更新)
 ├── apps/
 │   ├── headlamp/                      # Headlamp HelmRelease
 │   └── victoria-logs/                 # VictoriaLogs + Vector(ログ)
+├── renovate.json                      # cloudflared イメージの自動更新
 └── terraform/
     ├── cloudflare/                    # Tunnel / DNS / Access
     ├── kubernetes.tf                  # Namespace と Secret
