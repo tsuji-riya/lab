@@ -1,5 +1,5 @@
 locals {
-  longhorn_hostname = "longhorn-lab.riya.work"
+  longhorn_hostname = "longhorn.riya.work"
   headlamp_hostname = "headlamp.riya.work"
 }
 

@@ -34,7 +34,7 @@ flowchart TB
 
     subgraph CF["☁️ Cloudflare"]
         r2[("🪣 R2<br/>tfstate")]
-        dns["DNS<br/>longhorn-lab / headlamp"]
+        dns["DNS<br/>longhorn / headlamp"]
         access["🛡️ Zero Trust Access<br/>owner-only"]
         tunnel{{"🚇 Tunnel: k3s"}}
     end
@@ -101,7 +101,7 @@ flowchart TB
     sc_ssd -- "ssd タグ" --- pi
     sc_ssd --- lh
 
-    user -- "longhorn-lab.riya.work" --> access
+    user -- "longhorn.riya.work" --> access
     user -- "headlamp.riya.work" --> access
     access --> dns
     dns --> tunnel
@@ -133,7 +133,7 @@ flowchart TB
 
 | ホスト名 | 転送先 | アクセス制限 |
 | --- | --- | --- |
-| `longhorn-lab.riya.work` | `longhorn-frontend.longhorn-system:80` | Cloudflare Access (`owner-only`) |
+| `longhorn.riya.work` | `longhorn-frontend.longhorn-system:80` | Cloudflare Access (`owner-only`) |
 | `headlamp.riya.work` | `headlamp.headlamp:80` | Cloudflare Access (`owner-only`)。ログイン不要の閲覧専用 (Secret は見えない) |
 | `lab-k3s-api.riya.work` | k3s API `:6443` | CI が Access のサービストークン経由で利用 |
 
