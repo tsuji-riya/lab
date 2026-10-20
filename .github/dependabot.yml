@@ -1,0 +1,9 @@
+version: 2
+updates:
+  - package-ecosystem: docker
+    directory: /infrastructure/cloudflare
+    schedule:
+      interval: daily
+    # 壊れたリリースを掴まないよう公開から 3 日待つ
+    cooldown:
+      default-days: 3
