@@ -9,7 +9,7 @@ Terraform と Flux でほぼすべてをコード化していて、`main` に pu
 
 | ノード | ハードウェア | ストレージ |
 | --- | --- | --- |
-| node1 | ミニ PC | USB SATA HDD 💿 |
+| node1 | ミニ PC | - |
 | node2 | ミニ PC | - |
 | node3 | ミニ PC | - |
 | node4 | Raspberry Pi 🍓 | USB SATA SSD ⚡ |
@@ -17,8 +17,7 @@ Terraform と Flux でほぼすべてをコード化していて、`main` に pu
 | node6 | Raspberry Pi 🍓 | USB SATA SSD ⚡ |
 | node7 | Raspberry Pi 🍓 | USB SATA SSD ⚡ |
 
-- Longhorn のディスクは用途ごとにタグ分けしています。`ssd` は Raspberry Pi の USB SSD、`hdd` は node1 の USB HDD です。
-- 大きなデータ(Gitea のリポジトリ)は HDD、書き込みの多い PostgreSQL は SSD に置きます。
+- Longhorn のディスクは `ssd` タグ(Raspberry Pi の USB SSD)を使います。
 
 ---
 
@@ -27,17 +26,15 @@ Terraform と Flux でほぼすべてをコード化していて、`main` に pu
 ```mermaid
 flowchart TB
     user(["👩‍💻 Riya"])
-    visitor(["🌍 一般ユーザー<br/>(公開リポジトリ閲覧のみ)"])
 
     subgraph GH["GitHub"]
         repo[("📦 tsuji-riya/lab")]
         actions["⚙️ GitHub Actions<br/>terraform workflow"]
-        oauth["🔑 GitHub OAuth App"]
     end
 
     subgraph CF["☁️ Cloudflare"]
         r2[("🪣 R2<br/>tfstate")]
-        dns["DNS<br/>gitea / longhorn-lab / headlamp"]
+        dns["DNS<br/>longhorn-lab / headlamp"]
         access["🛡️ Zero Trust Access<br/>owner-only"]
         tunnel{{"🚇 Tunnel: k3s"}}
     end
@@ -48,7 +45,7 @@ flowchart TB
 
         subgraph NODES["ノード"]
             direction LR
-            mini["🖥️ node1-3<br/>ミニ PC<br/>node1: USB HDD"]
+            mini["🖥️ node1-3<br/>ミニ PC"]
             pi["🍓 node4-7<br/>Raspberry Pi<br/>USB SSD"]
         end
 
@@ -65,7 +62,6 @@ flowchart TB
 
         subgraph NS_LH["ns: longhorn-system"]
             lh["🐮 Longhorn"]
-            sc_hdd["StorageClass<br/>longhorn-hdd"]
             sc_ssd["StorageClass<br/>longhorn-ssd-single"]
         end
 
@@ -76,10 +72,6 @@ flowchart TB
         subgraph NS_PG["ns: postgres"]
             pgp[("🐘 postgres-1<br/>primary")]
             pgs[("🐘 postgres-2<br/>standby")]
-        end
-
-        subgraph NS_GITEA["ns: gitea"]
-            gitea["🍵 Gitea"]
         end
 
         subgraph NS_HL["ns: headlamp"]
@@ -100,30 +92,20 @@ flowchart TB
     ks_infra --> cnpg
     ks_infra --> cfd
     ks_pg --> pgp
-    ks_apps --> gitea
     ks_apps --> headlamp
 
     cnpg -- "管理" --> pgp
     pgp == "非同期レプリケーション" ==> pgs
     pgp --- sc_ssd
     pgs --- sc_ssd
-    gitea -- "50Gi PVC" --- sc_hdd
-    sc_hdd -- "hdd タグ" --- mini
     sc_ssd -- "ssd タグ" --- pi
-    sc_hdd --- lh
     sc_ssd --- lh
-
-    gitea -- "DB 接続" --> pgp
-    gitea -. "ログイン連携" .-> oauth
 
     user -- "longhorn-lab.riya.work" --> access
     user -- "headlamp.riya.work" --> access
-    user -- "gitea.riya.work" --> dns
-    visitor -- "gitea.riya.work" --> dns
     access --> dns
     dns --> tunnel
     tunnel == "outbound 接続" ==> cfd
-    cfd -- ":3000" --> gitea
     cfd -- ":80" --> lh
     cfd -- ":80" --> headlamp
     headlamp -- "k8s API" --> api
@@ -139,11 +121,10 @@ flowchart TB
 | tfstate | Cloudflare R2 (S3 互換) | Terraform の state 置き場 |
 | GitOps | Flux CD | リポジトリの内容をクラスタへ同期 |
 | Kubernetes | k3s | クラスタ本体 (ミニ PC 3 台 + Raspberry Pi 4 台) |
-| ストレージ | Longhorn `1.12.1` | SSD / HDD の分散ブロックストレージ |
+| ストレージ | Longhorn `1.12.1` | SSD の分散ブロックストレージ |
 | データベース | CloudNativePG `0.29.1` | 共有 PostgreSQL クラスタ |
 | 公開経路 | Cloudflare Tunnel (`cloudflared` x2) | ポート開放なしで外部公開 |
 | 認証 | Cloudflare Access | Longhorn UI / Headlamp を自分だけに制限 |
-| アプリ | Gitea (chart `12.7.0`) | セルフホストの Git サービス |
 | アプリ | Headlamp (chart `0.45.0`) | Kubernetes の Web UI |
 
 ---
@@ -152,7 +133,6 @@ flowchart TB
 
 | ホスト名 | 転送先 | アクセス制限 |
 | --- | --- | --- |
-| `gitea.riya.work` | `gitea-http.gitea:3000` | 未ログインで公開リポジトリを閲覧可。新規登録は無効 |
 | `longhorn-lab.riya.work` | `longhorn-frontend.longhorn-system:80` | Cloudflare Access (`owner-only`) |
 | `headlamp.riya.work` | `headlamp.headlamp:80` | Cloudflare Access (`owner-only`)。ログイン不要の閲覧専用 (Secret は見えない) |
 | `lab-k3s-api.riya.work` | k3s API `:6443` | CI が Access のサービストークン経由で利用 |
@@ -164,7 +144,6 @@ flowchart TB
 | StorageClass | ディスク | レプリカ | 用途 |
 | --- | --- | --- | --- |
 | `longhorn-ssd-single` ⚡ | `ssd` (Raspberry Pi の USB SSD) | 1 (`strict-local`) | PostgreSQL。レプリケーションは CNPG 側で行う |
-| `longhorn-hdd` 💿 | `hdd` (node1 の USB HDD) | 1 | Gitea のリポジトリデータ (50Gi) |
 
 Longhorn のデフォルトディスクは `ssd` のものだけに絞っています。
 
@@ -175,7 +154,7 @@ Longhorn のデフォルトディスクは `ssd` のものだけに絞ってい�
 - `postgres` namespace にプライマリとスタンバイの 2 台を置き、非同期レプリケーションします
 - Pod Anti-Affinity で別ノードに分散し、`etcd` ロールのノードに配置します
 - `wal_compression` と `checkpoint_timeout: 15min` で WAL の量を抑えます
-- アプリごとのロールと DB は `infrastructure/postgres/` に追加します (今は `gitea` のみ)
+- アプリごとのロールと DB は `infrastructure/postgres/` に追加します (今はまだありません)
 
 ---
 
@@ -201,7 +180,7 @@ sequenceDiagram
     CI->>K: Flux を apply して reconcile を要求
     F->>GH: リポジトリを取得
     F->>K: infrastructure → postgres → apps の順で適用
-    K-->>R: gitea.riya.work が更新される 🎉
+    K-->>R: クラスタが更新される 🎉
 ```
 
 ### Flux の依存関係
@@ -209,7 +188,7 @@ sequenceDiagram
 ```mermaid
 flowchart LR
     a["infrastructure<br/>Longhorn / CNPG / cloudflared"] --> b["postgres<br/>Cluster / Database"]
-    a --> c["apps<br/>Gitea / Headlamp"]
+    a --> c["apps<br/>Headlamp"]
     b --> c
 ```
 
@@ -236,7 +215,6 @@ lab
 │   ├── k3s-upgrade/                   # k3s の Plan(stable チャンネル追従)
 │   └── cloudflare/                    # cloudflared Deployment
 ├── apps/
-│   ├── gitea/                         # Gitea HelmRelease
 │   └── headlamp/                      # Headlamp HelmRelease
 └── terraform/
     ├── cloudflare/                    # Tunnel / DNS / Access
