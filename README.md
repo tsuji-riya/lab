@@ -136,6 +136,7 @@ flowchart TB
 | 認証 | Cloudflare Access | Longhorn UI / Headlamp / VictoriaLogs を自分だけに制限 |
 | アプリ | Headlamp (chart `0.45.0`) | Kubernetes の Web UI |
 | アプリ | VictoriaLogs (chart `0.13.10`) + Vector | ログの収集と Web UI |
+| アプリ | nginx (`nginx-unprivileged`) | Anubis ちゃんを無限に出し続ける静的サイト |
 
 ---
 
@@ -146,6 +147,7 @@ flowchart TB
 | `longhorn.riya.work` | `longhorn-frontend.longhorn-system:80` | Cloudflare Access (`owner-only`) |
 | `headlamp.riya.work` | `headlamp.headlamp:80` | Cloudflare Access (`owner-only`)。ログイン不要の閲覧専用 (Secret は見えない) |
 | `logs.riya.work` | `victoria-logs-victoria-logs-single-server.victoria-logs:9428` | Cloudflare Access (`owner-only`) |
+| `anubis.riya.work` | `anubis.anubis:80` | なし (公開) |
 | `lab-k3s-api.riya.work` | k3s API `:6443` | CI が Access のサービストークン経由で利用 |
 
 ---
@@ -251,6 +253,7 @@ lab
 │   ├── k3s-upgrade/                   # k3s の Plan(stable チャンネル追従)
 │   └── cloudflare/                    # cloudflared Deployment(Dependabot で更新 PR)
 ├── apps/
+│   ├── anubis/                        # anubis.riya.work の静的サイト(site/ を ConfigMap で配信)
 │   ├── headlamp/                      # Headlamp HelmRelease
 │   └── victoria-logs/                 # VictoriaLogs + Vector(ログ)
 └── terraform/

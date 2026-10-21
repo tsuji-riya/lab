@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- namespace.yaml
+- deployment.yaml
+- service.yaml
+- networkpolicy.yaml
+# 中身が変わると名前のハッシュが変わり、Deployment がローリングアップデートされる
+configMapGenerator:
+- name: site
+  namespace: anubis
+  files:
+  - site/index.html
+  - site/happy.webp
+  - site/pensive.webp
+  - site/reject.webp
+  - site/LICENSE.txt
