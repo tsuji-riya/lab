@@ -24,3 +24,13 @@ resource "cloudflare_dns_record" "logs" {
   proxied = true
   ttl     = 1
 }
+
+# 誰でも見られる公開サイトなので Access アプリは作らない
+resource "cloudflare_dns_record" "anubis" {
+  zone_id = var.zone_id
+  name    = local.anubis_hostname
+  type    = "CNAME"
+  content = "${cloudflare_zero_trust_tunnel_cloudflared.k3s.id}.cfargotunnel.com"
+  proxied = true
+  ttl     = 1
+}

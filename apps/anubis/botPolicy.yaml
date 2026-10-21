@@ -1,0 +1,13 @@
+# ページを開くたびにチェッカーを見せるため、ブラウザかどうかに関係なく全員に CHALLENGE する。
+# 画像とライセンスはページの部品なので素通しする
+bots:
+  - name: static-assets
+    path_regex: \.(webp|txt)$
+    action: ALLOW
+  - import: (data)/common/keep-internet-working.yaml
+  - name: everyone
+    path_regex: .*
+    action: CHALLENGE
+    challenge:
+      algorithm: fast
+      difficulty: 4

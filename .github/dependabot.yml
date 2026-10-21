@@ -7,3 +7,9 @@ updates:
     # 壊れたリリースを掴まないよう公開から 3 日待つ
     cooldown:
       default-days: 3
+  - package-ecosystem: docker
+    directory: /apps/anubis
+    schedule:
+      interval: daily
+    cooldown:
+      default-days: 3
