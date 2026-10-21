@@ -4,7 +4,8 @@ metadata:
   name: anubis
   namespace: anubis
 spec:
-  replicas: 2
+  # Anubis はチャレンジを Pod のメモリに持つので、複数台にすると別 Pod で答え合わせできない
+  replicas: 1
   selector:
     matchLabels:
       app: anubis
@@ -14,10 +15,48 @@ spec:
         app: anubis
     spec:
       containers:
+        # 前段で Anubis のチェッカーを出し、通ったリクエストだけ nginx に渡す
+        - name: anubis
+          image: ghcr.io/techarohq/anubis:v1.28.1
+          ports:
+            - name: http
+              containerPort: 8923
+          env:
+            - name: TARGET
+              value: http://localhost:8080
+            - name: POLICY_FNAME
+              value: /data/cfg/botPolicy.yaml
+            - name: CUSTOM_REAL_IP_HEADER
+              value: Cf-Connecting-Ip
+            # 合格クッキーをすぐ切らして、次にページを開いたときもチェッカーを出す
+            - name: COOKIE_EXPIRATION_TIME
+              value: 10s
+            # 合格後に飛ばしてよい先を自分だけにする (オープンリダイレクト対策)
+            - name: REDIRECT_DOMAINS
+              value: anubis.riya.work
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 9090
+          volumeMounts:
+            - name: bot-policy
+              mountPath: /data/cfg
+              readOnly: true
         - name: nginx
           image: nginxinc/nginx-unprivileged:1.31.7-alpine
           ports:
-            - name: http
+            - name: nginx
               containerPort: 8080
           securityContext:
             allowPrivilegeEscalation: false
@@ -33,17 +72,27 @@ spec:
           readinessProbe:
             httpGet:
               path: /
-              port: http
+              port: nginx
           volumeMounts:
             - name: site
               mountPath: /usr/share/nginx/html
+              readOnly: true
+            - name: nginx-conf
+              mountPath: /etc/nginx/conf.d/no-store.conf
+              subPath: nginx-no-store.conf
               readOnly: true
             # nginx のキャッシュと pid 置き場
             - name: tmp
               mountPath: /tmp
       volumes:
+        - name: bot-policy
+          configMap:
+            name: bot-policy
         - name: site
           configMap:
             name: site
+        - name: nginx-conf
+          configMap:
+            name: nginx-conf
         - name: tmp
           emptyDir: {}

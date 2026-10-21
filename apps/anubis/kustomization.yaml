@@ -15,3 +15,11 @@ configMapGenerator:
   - site/pensive.webp
   - site/reject.webp
   - site/LICENSE.txt
+- name: bot-policy
+  namespace: anubis
+  files:
+  - botPolicy.yaml
+- name: nginx-conf
+  namespace: anubis
+  files:
+  - nginx-no-store.conf
