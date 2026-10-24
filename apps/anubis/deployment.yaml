@@ -17,7 +17,7 @@ spec:
       containers:
         # 前段で Anubis のチェッカーを出し、通ったリクエストだけ nginx に渡す
         - name: anubis
-          image: ghcr.io/techarohq/anubis:v1.28.1
+          image: ghcr.io/techarohq/anubis:v1.28.2
           ports:
             - name: http
               containerPort: 8923
