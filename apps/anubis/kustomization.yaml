@@ -7,19 +7,7 @@ resources:
 - networkpolicy.yaml
 # 中身が変わると名前のハッシュが変わり、Deployment がローリングアップデートされる
 configMapGenerator:
-- name: site
-  namespace: anubis
-  files:
-  - site/index.html
-  - site/happy.webp
-  - site/pensive.webp
-  - site/reject.webp
-  - site/LICENSE.txt
 - name: bot-policy
   namespace: anubis
   files:
   - botPolicy.yaml
-- name: nginx-conf
-  namespace: anubis
-  files:
-  - nginx-no-store.conf

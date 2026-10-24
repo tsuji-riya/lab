@@ -136,7 +136,7 @@ flowchart TB
 | 認証 | Cloudflare Access | Longhorn UI / Headlamp / VictoriaLogs を自分だけに制限 |
 | アプリ | Headlamp (chart `0.45.0`) | Kubernetes の Web UI |
 | アプリ | VictoriaLogs (chart `0.13.10`) + Vector | ログの収集と Web UI |
-| アプリ | Anubis `v1.28.1` + nginx (`nginx-unprivileged`) | Anubis のチェッカーを通ると、Anubis ちゃんを無限に出し続ける静的サイト |
+| アプリ | Anubis `v1.28.2` + nginx ([tsuji-riya/anubis.riya.work](https://github.com/tsuji-riya/anubis.riya.work) のイメージ) | Anubis のチェッカーを通ると、Anubis ちゃんを無限に出し続ける静的サイト |
 | アプリ | fantasy ([tsuji-riya/fantasy](https://github.com/tsuji-riya/fantasy) のイメージ) | Fantasy Zone をブラウザで遊ぶ静的サイト。ROM は利用者が手元から読み込む |
 
 ---
@@ -255,7 +255,7 @@ lab
 │   ├── k3s-upgrade/                   # k3s の Plan(stable チャンネル追従)
 │   └── cloudflare/                    # cloudflared Deployment(Dependabot で更新 PR)
 ├── apps/
-│   ├── anubis/                        # anubis.riya.work(Anubis → nginx、site/ を ConfigMap で配信)
+│   ├── anubis/                        # anubis.riya.work(Anubis → nginx、サイトのコードは tsuji-riya/anubis.riya.work)
 │   ├── fantasy/                       # fantasy.riya.work(サイトのコードは tsuji-riya/fantasy)
 │   ├── headlamp/                      # Headlamp HelmRelease
 │   └── victoria-logs/                 # VictoriaLogs + Vector(ログ)
