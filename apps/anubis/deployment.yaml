@@ -54,7 +54,8 @@ spec:
               mountPath: /data/cfg
               readOnly: true
         - name: nginx
-          image: nginxinc/nginx-unprivileged:1.31.7-alpine
+          # サイト本体は tsuji-riya/anubis.riya.work でビルドしたイメージ (nginx + 静的ファイル)
+          image: ghcr.io/tsuji-riya/anubis.riya.work:1.0.1
           ports:
             - name: nginx
               containerPort: 8080
@@ -74,13 +75,6 @@ spec:
               path: /
               port: nginx
           volumeMounts:
-            - name: site
-              mountPath: /usr/share/nginx/html
-              readOnly: true
-            - name: nginx-conf
-              mountPath: /etc/nginx/conf.d/no-store.conf
-              subPath: nginx-no-store.conf
-              readOnly: true
             # nginx のキャッシュと pid 置き場
             - name: tmp
               mountPath: /tmp
@@ -88,11 +82,5 @@ spec:
         - name: bot-policy
           configMap:
             name: bot-policy
-        - name: site
-          configMap:
-            name: site
-        - name: nginx-conf
-          configMap:
-            name: nginx-conf
         - name: tmp
           emptyDir: {}
