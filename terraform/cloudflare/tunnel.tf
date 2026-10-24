@@ -3,6 +3,7 @@ locals {
   headlamp_hostname = "headlamp.riya.work"
   logs_hostname     = "logs.riya.work"
   anubis_hostname   = "anubis.riya.work"
+  fantasy_hostname  = "fantasy.riya.work"
 }
 
 resource "random_bytes" "tunnel_secret" {
@@ -36,6 +37,10 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "k3s" {
       {
         hostname = local.anubis_hostname
         service  = "http://anubis.anubis.svc.cluster.local:80"
+      },
+      {
+        hostname = local.fantasy_hostname
+        service  = "http://fantasy.fantasy.svc.cluster.local:80"
       },
       {
         service = "http_status:404"

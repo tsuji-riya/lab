@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fantasy
+  namespace: fantasy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fantasy
+  template:
+    metadata:
+      labels:
+        app: fantasy
+    spec:
+      containers:
+        # サイト本体は tsuji-riya/fantasy でビルドしたイメージ (nginx + EmulatorJS)。ROM は入っていない
+        - name: nginx
+          image: ghcr.io/tsuji-riya/fantasy:1.0.12
+          ports:
+            - name: http
+              containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          volumeMounts:
+            # nginx のキャッシュと pid 置き場
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

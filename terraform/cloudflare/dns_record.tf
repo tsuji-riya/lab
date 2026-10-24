@@ -34,3 +34,13 @@ resource "cloudflare_dns_record" "anubis" {
   proxied = true
   ttl     = 1
 }
+
+# ROM は配信せず利用者が手元から読み込むので、Access なしで公開する
+resource "cloudflare_dns_record" "fantasy" {
+  zone_id = var.zone_id
+  name    = local.fantasy_hostname
+  type    = "CNAME"
+  content = "${cloudflare_zero_trust_tunnel_cloudflared.k3s.id}.cfargotunnel.com"
+  proxied = true
+  ttl     = 1
+}
