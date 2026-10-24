@@ -14,9 +14,9 @@ spec:
         app: fantasy
     spec:
       containers:
-        # サイト本体は tsuji-riya/fantasy でビルドしたイメージ (nginx + EmulatorJS)。ROM は入っていない
+        # サイト本体は tsuji-riya/fantasy.riya.work でビルドしたイメージ (nginx + EmulatorJS)。ROM は入っていない
         - name: nginx
-          image: ghcr.io/tsuji-riya/fantasy:1.0.13
+          image: ghcr.io/tsuji-riya/fantasy.riya.work:1.0.14
           ports:
             - name: http
               containerPort: 8080
