@@ -137,6 +137,7 @@ flowchart TB
 | アプリ | Headlamp (chart `0.45.0`) | Kubernetes の Web UI |
 | アプリ | VictoriaLogs (chart `0.13.10`) + Vector | ログの収集と Web UI |
 | アプリ | Anubis `v1.28.1` + nginx (`nginx-unprivileged`) | Anubis のチェッカーを通ると、Anubis ちゃんを無限に出し続ける静的サイト |
+| アプリ | fantasy ([tsuji-riya/fantasy](https://github.com/tsuji-riya/fantasy) のイメージ) | Fantasy Zone をブラウザで遊ぶ静的サイト。ROM は利用者が手元から読み込む |
 
 ---
 
@@ -148,6 +149,7 @@ flowchart TB
 | `headlamp.riya.work` | `headlamp.headlamp:80` | Cloudflare Access (`owner-only`)。ログイン不要の閲覧専用 (Secret は見えない) |
 | `logs.riya.work` | `victoria-logs-victoria-logs-single-server.victoria-logs:9428` | Cloudflare Access (`owner-only`) |
 | `anubis.riya.work` | `anubis.anubis:80` | なし (公開)。開くたびに Anubis のチェッカーが出る |
+| `fantasy.riya.work` | `fantasy.fantasy:80` | なし (公開)。ROM はサーバーに置かない |
 | `lab-k3s-api.riya.work` | k3s API `:6443` | CI が Access のサービストークン経由で利用 |
 
 ---
@@ -238,7 +240,7 @@ CNPG の CRD は `infrastructure` の HelmRelease が入れるため、`Cluster`
 lab
 ├── .github/
 │   ├── workflows/deploy.yaml          # CI: plan / apply / Flux 適用
-│   └── dependabot.yml                 # cloudflared イメージの更新 PR
+│   └── dependabot.yml                 # cloudflared / anubis / fantasy イメージの更新 PR
 ├── fluxcd/                            # Flux 本体と Kustomization 定義
 │   ├── flux-system/
 │   ├── infrastructure.yaml
@@ -254,6 +256,7 @@ lab
 │   └── cloudflare/                    # cloudflared Deployment(Dependabot で更新 PR)
 ├── apps/
 │   ├── anubis/                        # anubis.riya.work(Anubis → nginx、site/ を ConfigMap で配信)
+│   ├── fantasy/                       # fantasy.riya.work(サイトのコードは tsuji-riya/fantasy)
 │   ├── headlamp/                      # Headlamp HelmRelease
 │   └── victoria-logs/                 # VictoriaLogs + Vector(ログ)
 └── terraform/
