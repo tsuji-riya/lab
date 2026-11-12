@@ -130,12 +130,12 @@ flowchart TB
 | tfstate | Cloudflare R2 (S3 互換) | Terraform の state 置き場 |
 | GitOps | Flux CD | リポジトリの内容をクラスタへ同期 |
 | Kubernetes | k3s | クラスタ本体 (ミニ PC 3 台 + Raspberry Pi 4 台) |
-| ストレージ | Longhorn `1.12.1` | SSD の分散ブロックストレージ |
+| ストレージ | Longhorn `1.13.0` | SSD の分散ブロックストレージ |
 | データベース | CloudNativePG `0.29.1` | 共有 PostgreSQL クラスタ |
 | 公開経路 | Cloudflare Tunnel (`cloudflared` x2) | ポート開放なしで外部公開 |
 | 認証 | Cloudflare Access | Longhorn UI / Headlamp / VictoriaLogs を自分だけに制限 |
-| アプリ | Headlamp (chart `0.45.0`) | Kubernetes の Web UI |
-| アプリ | VictoriaLogs (chart `0.13.10`) + Vector | ログの収集と Web UI |
+| アプリ | Headlamp (chart `0.46.0`) | Kubernetes の Web UI |
+| アプリ | VictoriaLogs (chart `0.13.12`) + Vector | ログの収集と Web UI |
 | アプリ | Anubis `v1.28.2` + nginx ([tsuji-riya/anubis.riya.work](https://github.com/tsuji-riya/anubis.riya.work) のイメージ) | Anubis のチェッカーを通ると、Anubis ちゃんを無限に出し続ける静的サイト |
 | アプリ | fantasy ([tsuji-riya/fantasy.riya.work](https://github.com/tsuji-riya/fantasy.riya.work) のイメージ) | Fantasy Zone をブラウザで遊ぶ静的サイト。ROM は利用者が手元から読み込む |
 
