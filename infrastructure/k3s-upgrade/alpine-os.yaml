@@ -14,8 +14,23 @@ spec:
     matchExpressions:
     - { key: kubernetes.io/os, operator: In, values: [linux] }
   serviceAccountName: system-upgrade
-  # drain(Longhorn のレプリカ退避を含む)+ 更新 + 再起動が収まる長さ
-  jobActiveDeadlineSecs: 3600
+  # drain(Longhorn のレプリカ退避を含む、最大 30 分)+ 更新 + 再起動 + 下の sleep が収まる長さ。
+  # 超えると Job が失敗し、SUC は uncordon しないのでノードが cordon のまま残る
+  jobActiveDeadlineSecs: 7200
+  # cordon/drain より前に走る。対象外のノードを無駄に drain せず失敗させる
+  prepare:
+    image: alpine:3.22
+    command: ["sh", "-c"]
+    args:
+    - |
+      set -eu
+      # ディスクレスモード(ルートが tmpfs)だと更新もマーカーも再起動で消えて再起動ループになるため止める
+      if grep -q '^[^ ]* / tmpfs ' /proc/1/mounts; then echo "host root is tmpfs; refusing"; exit 1; fi
+      # k3s が apk 管理だと k3s の Plan と別順序で上がるため止める
+      if chroot /host apk info -e k3s >/dev/null; then echo "k3s is managed by apk; refusing"; exit 1; fi
+    # prepare は既定で非特権。ホストの PID 1 の /proc を確実に読むため
+    securityContext:
+      privileged: true
   drain:
     timeout: 30m
   upgrade:
@@ -24,8 +39,6 @@ spec:
     args:
     - |
       set -eu
-      # ディスクレスモード(ルートが tmpfs)だと更新もマーカーも再起動で消えて再起動ループになるため止める
-      if grep -q '^[^ ]* / tmpfs ' /proc/1/mounts; then echo "host root is tmpfs; refusing"; exit 1; fi
       dir=/host/var/lib/alpine-os-upgrade
       # 再起動後に Job の Pod が作り直されるとここで成功終了し、SUC が uncordon する
       [ -f "$dir/$SYSTEM_UPGRADE_PLAN_LATEST_HASH" ] && exit 0
