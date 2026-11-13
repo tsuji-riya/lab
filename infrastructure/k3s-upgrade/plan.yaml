@@ -6,6 +6,7 @@ metadata:
   namespace: system-upgrade
 spec:
   concurrency: 1
+  exclusive: true
   cordon: true
   channel: https://update.k3s.io/v1-release/channels/stable
   nodeSelector:
@@ -22,6 +23,7 @@ metadata:
   namespace: system-upgrade
 spec:
   concurrency: 1
+  exclusive: true
   cordon: true
   channel: https://update.k3s.io/v1-release/channels/stable
   nodeSelector:

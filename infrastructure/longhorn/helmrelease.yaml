@@ -19,6 +19,10 @@ spec:
   upgrade:
     crds: Create
   values:
+    defaultSettings:
+      # 単一レプリカ(longhorn-ssd-single)のノードを drain するとき、レプリカを別ノードへ移してから進める。
+      # 既定(block-if-contains-last-replica)だと alpine-os Plan の drain が止まる
+      nodeDrainPolicy: block-for-eviction-if-contains-last-replica
     persistence:
       defaultDiskSelector:
         enable: true
