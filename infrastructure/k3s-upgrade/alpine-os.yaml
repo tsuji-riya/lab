@@ -1,0 +1,116 @@
+# ホスト OS(Alpine)を 1 台ずつ drain → apk upgrade → 再起動 する
+# spec.version は下の CronJob が毎週書き換えて実行のきっかけにする。
+# Git に version を書くと Flux が毎回書き戻すので書かない(未設定の間は Plan が待機するだけ)
+apiVersion: upgrade.cattle.io/v1
+kind: Plan
+metadata:
+  name: alpine-os
+  namespace: system-upgrade
+spec:
+  concurrency: 1
+  # 同じノードで k3s の Plan と同時に走らせない
+  exclusive: true
+  nodeSelector:
+    matchExpressions:
+    - { key: kubernetes.io/os, operator: In, values: [linux] }
+  serviceAccountName: system-upgrade
+  # drain(Longhorn のレプリカ退避を含む、最大 30 分)+ 更新 + 再起動 + 下の sleep が収まる長さ。
+  # 超えると Job が失敗し、SUC は uncordon しないのでノードが cordon のまま残る
+  jobActiveDeadlineSecs: 7200
+  # cordon/drain より前に走る。対象外のノードを無駄に drain せず失敗させる
+  prepare:
+    image: alpine:3.22
+    command: ["sh", "-c"]
+    args:
+    - |
+      set -eu
+      # ディスクレスモード(ルートが tmpfs)だと更新もマーカーも再起動で消えて再起動ループになるため止める
+      if grep -q '^[^ ]* / tmpfs ' /proc/1/mounts; then echo "host root is tmpfs; refusing"; exit 1; fi
+      # k3s が apk 管理だと k3s の Plan と別順序で上がるため止める
+      if chroot /host apk info -e k3s >/dev/null; then echo "k3s is managed by apk; refusing"; exit 1; fi
+    # prepare は既定で非特権。ホストの PID 1 の /proc を確実に読むため
+    securityContext:
+      privileged: true
+  drain:
+    timeout: 30m
+  upgrade:
+    image: alpine:3.22
+    command: ["sh", "-c"]
+    args:
+    - |
+      set -eu
+      dir=/host/var/lib/alpine-os-upgrade
+      # 再起動後に Job の Pod が作り直されるとここで成功終了し、SUC が uncordon する
+      [ -f "$dir/$SYSTEM_UPGRADE_PLAN_LATEST_HASH" ] && exit 0
+      chroot /host apk update
+      chroot /host apk upgrade --no-cache
+      rm -rf "$dir" && mkdir -p "$dir" && touch "$dir/$SYSTEM_UPGRADE_PLAN_LATEST_HASH" && sync
+      chroot /host reboot
+      # ここで終了すると再起動前に Job 成功 → uncordon されるので、再起動で止められるまで待つ
+      sleep 3600
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: alpine-os-trigger
+  namespace: system-upgrade
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: alpine-os-trigger
+  namespace: system-upgrade
+rules:
+- apiGroups: [upgrade.cattle.io]
+  resources: [plans]
+  resourceNames: [alpine-os]
+  verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: alpine-os-trigger
+  namespace: system-upgrade
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: alpine-os-trigger
+subjects:
+- kind: ServiceAccount
+  name: alpine-os-trigger
+  namespace: system-upgrade
+---
+# 毎週日曜 03:00 JST に Plan の version を Job 名(実行ごとに一意)へ書き換えて、全ノードの更新を始める
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: alpine-os-trigger
+  namespace: system-upgrade
+spec:
+  schedule: "0 3 * * 0"
+  timeZone: Asia/Tokyo
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      ttlSecondsAfterFinished: 86400
+      template:
+        spec:
+          serviceAccountName: alpine-os-trigger
+          restartPolicy: Never
+          containers:
+          - name: kubectl
+            # SUC の drain に使っているものと同じイメージ(entrypoint が kubectl)
+            image: rancher/kubectl:v1.30.3
+            env:
+            - name: JOB_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['batch.kubernetes.io/job-name']
+            args:
+            - patch
+            - plan
+            - alpine-os
+            - --namespace=system-upgrade
+            - --type=merge
+            - --patch={"spec":{"version":"$(JOB_NAME)"}}

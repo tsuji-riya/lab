@@ -251,8 +251,8 @@ lab
 │   ├── longhorn/                      # ストレージと StorageClass
 │   ├── cnpg/                          # CloudNativePG operator
 │   ├── postgres/                      # 共有 PostgreSQL クラスタ
-│   ├── system-upgrade-controller/     # k3s 自動アップグレードの controller
-│   ├── k3s-upgrade/                   # k3s の Plan(stable チャンネル追従)
+│   ├── system-upgrade-controller/     # k3s / Alpine 自動アップグレードの controller
+│   ├── k3s-upgrade/                   # k3s の Plan(stable チャンネル追従)と Alpine の週次更新 Plan
 │   └── cloudflare/                    # cloudflared Deployment(Dependabot で更新 PR)
 ├── apps/
 │   ├── anubis/                        # anubis.riya.work(Anubis → nginx、サイトのコードは tsuji-riya/anubis.riya.work)
