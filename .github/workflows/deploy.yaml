@@ -23,6 +23,8 @@ env:
   TF_VAR_k8s_cluster_ca_certificate: ${{ secrets.K8S_CLUSTER_CA_CERTIFICATE }}
   TF_VAR_k8s_client_certificate: ${{ secrets.K8S_CLIENT_CERTIFICATE }}
   TF_VAR_k8s_client_key: ${{ secrets.K8S_CLIENT_KEY }}
+  TF_VAR_claude_oauth_refresh_token: ${{ secrets.CLAUDE_OAUTH_REFRESH_TOKEN }}
+  TF_VAR_claude_oauth_scopes: ${{ secrets.CLAUDE_OAUTH_SCOPES }}
 
 jobs:
   deploy:

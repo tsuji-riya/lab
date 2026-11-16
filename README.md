@@ -207,14 +207,16 @@ Playwright MCP 公式イメージに Claude Code を npm で入れて同居さ�
 - 同時セッションは 2 つまで(`--capacity 2`)、メモリ上限は 2Gi
 - 外向き通信はインターネットと DNS だけ。家の LAN とクラスタ内には届きません
 
-初回だけ、ログインと Remote Control の確認に手で答えます。
+クラスタに入って手で答える作業はありません。ログインは GitHub Secrets のリフレッシュトークンで行い、Remote Control の同意と作業ディレクトリの信頼は initContainer が `~/.claude.json` に書き込んでおきます。
+リフレッシュトークンは手元で次のように発行し、出てきた 2 行を GitHub Secrets の `CLAUDE_OAUTH_REFRESH_TOKEN` と `CLAUDE_OAUTH_SCOPES` に入れます。
 
 ```sh
-kubectl -n claude attach -it deploy/claude
-# 1. 表示される URL をブラウザで開いてログインし、コードを貼る
-# 2. "Enable Remote Control? (y/n)" と "Trust /home/node/work?" に y
-# 3. Ctrl-P Ctrl-Q で抜ける(Ctrl-C だと止まる)
+# 使い捨てのコンテナでログインし、トークンだけ取り出す(手元の Claude Code のログインとは別物になる)
+docker run --rm -it node:lts-slim sh -c 'npx -y @anthropic-ai/claude-code auth login >&2 && node -p "const o = require(\"/root/.claude/.credentials.json\").claudeAiOauth; o.refreshToken + \"\\n\" + o.scopes.join(\" \")"'
 ```
+
+- リフレッシュトークンは一度しか使えません。Pod は `$HOME` にログイン情報がないときだけ使い、以後は PVC 上のログインを自分で更新します
+- PVC を消したときは、上のコマンドでトークンを発行し直して GitHub Secrets を差し替え、`main` の deploy を流し直します。ログインできない間は initContainer が失敗して Pod が再起動を繰り返すので、次の起動で新しい Secret を拾います
 
 以後は claude.ai/code やスマホの Claude アプリに `lab-claude` として出ます。
 

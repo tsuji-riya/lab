@@ -29,12 +29,10 @@ spec:
         runAsUser: 1000
         runAsGroup: 1000
         fsGroup: 1000
-      containers:
-        - name: claude
+      # 手で答える場面をなくすための準備。ログイン用の Secret はここにだけ渡し、Claude のセッションからは読めないようにする
+      initContainers:
+        - name: setup
           image: mcr.microsoft.com/playwright/mcp:v0.0.85
-          # 初回の `claude auth login` と Remote Control の確認(y/n)に `kubectl attach -it` で答えるため
-          stdin: true
-          tty: true
           workingDir: /home/node
           command: ["bash", "-c"]
           args:
@@ -48,12 +46,41 @@ spec:
               # 無人のスケジュール実行でブラウザ操作が承認待ちで止まらないよう許可しておく。以後は自由に編集してよい
               [ -f "$HOME/.claude/settings.json" ] \
                 || { mkdir -p "$HOME/.claude"; echo '{"permissions":{"allow":["mcp__playwright"]}}' > "$HOME/.claude/settings.json"; }
-              # setup-token は Remote Control に使えないので、claude.ai の通常ログインが要る
-              claude auth status 2>/dev/null | grep '"loggedIn": true' >/dev/null || claude auth login
-              # ホームディレクトリは信頼設定が保存されないので、その下の作業用ディレクトリで動かす
-              mkdir -p "$HOME/work" && cd "$HOME/work"
-              # 同時セッション数を絞ってメモリ上限を守る。ネットワーク断が長いと rc は終了するので、kubelet の再起動に任せる
-              exec claude remote-control --name lab-claude --spawn same-dir --capacity 2
+              # `claude rc` の "Enable Remote Control? (y/n)" と作業ディレクトリの信頼確認を、答えた状態にしておく
+              mkdir -p "$HOME/work"
+              node -e '
+                const fs = require("fs"), f = `${process.env.HOME}/.claude.json`, dir = `${process.env.HOME}/work`;
+                const c = fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, "utf8")) : {};
+                c.remoteDialogSeen = true;
+                c.projects = { ...c.projects, [dir]: { ...c.projects?.[dir], hasTrustDialogAccepted: true } };
+                fs.writeFileSync(f, JSON.stringify(c, null, 2));
+              '
+              # リフレッシュトークンは一度しか使えないので、PVC にログイン情報がないときだけ使う
+              if ! claude auth status 2>/dev/null | grep '"loggedIn": true' >/dev/null; then
+                CLAUDE_CODE_OAUTH_REFRESH_TOKEN="$(cat /oauth/refresh-token)" CLAUDE_CODE_OAUTH_SCOPES="$(cat /oauth/scopes)" claude auth login
+              fi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: home
+              mountPath: /home/node
+            - name: tmp
+              mountPath: /tmp
+            - name: oauth
+              mountPath: /oauth
+              readOnly: true
+      containers:
+        - name: claude
+          image: mcr.microsoft.com/playwright/mcp:v0.0.85
+          workingDir: /home/node/work
+          # 同時セッション数を絞ってメモリ上限を守る。ネットワーク断が長いと rc は終了するので、kubelet の再起動に任せる
+          command: ["/home/node/.local/bin/claude", "remote-control", "--name", "lab-claude", "--spawn", "same-dir", "--capacity", "2"]
+          env:
+            # Bash ツールから claude を呼べるように
+            - name: PATH
+              value: /home/node/.local/bin:/usr/local/bin:/usr/bin:/bin
           resources:
             requests:
               cpu: 50m
@@ -77,3 +104,7 @@ spec:
         - name: tmp
           emptyDir:
             sizeLimit: 1Gi
+        - name: oauth
+          secret:
+            secretName: claude-oauth
+            defaultMode: 0440
