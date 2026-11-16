@@ -138,6 +138,7 @@ flowchart TB
 | アプリ | VictoriaLogs (chart `0.13.12`) + Vector | ログの収集と Web UI |
 | アプリ | Anubis `v1.28.2` + nginx ([tsuji-riya/anubis.riya.work](https://github.com/tsuji-riya/anubis.riya.work) のイメージ) | Anubis のチェッカーを通ると、Anubis ちゃんを無限に出し続ける静的サイト |
 | アプリ | fantasy ([tsuji-riya/fantasy.riya.work](https://github.com/tsuji-riya/fantasy.riya.work) のイメージ) | Fantasy Zone をブラウザで遊ぶ静的サイト。ROM は利用者が手元から読み込む |
+| アプリ | Claude Code + Playwright MCP (`mcr.microsoft.com/playwright/mcp` に同居) | node1-3 で `claude rc` を常駐させ、claude.ai/code やスマホからブラウザ操作込みで使う |
 
 ---
 
@@ -196,6 +197,29 @@ Longhorn のデフォルトディスクは `ssd` のものだけに絞ってい�
 
 ---
 
+## 🤖 Claude Code (Remote Control)
+
+`claude` namespace の Pod 1 つで、Claude Code の `claude rc`(Remote Control のサーバーモード)を常駐させています。
+Playwright MCP 公式イメージに Claude Code を npm で入れて同居させ、Playwright MCP は stdio でセッションごとに起動します。
+ブラウザを使っていない間は Chromium が動かないので、待機中のメモリは Claude 本体だけです。
+
+- 置き場所は node1-3(ミニ PC)のどれか。`$HOME` は Longhorn の PVC(既定の `longhorn` クラス)で、ログイン情報と Claude Code 本体が残ります
+- 同時セッションは 2 つまで(`--capacity 2`)、メモリ上限は 2Gi
+- 外向き通信はインターネットと DNS だけ。家の LAN とクラスタ内には届きません
+
+初回だけ、ログインと Remote Control の確認に手で答えます。
+
+```sh
+kubectl -n claude attach -it deploy/claude
+# 1. 表示される URL をブラウザで開いてログインし、コードを貼る
+# 2. "Enable Remote Control? (y/n)" と "Trust /home/node/work?" に y
+# 3. Ctrl-P Ctrl-Q で抜ける(Ctrl-C だと止まる)
+```
+
+以後は claude.ai/code やスマホの Claude アプリに `lab-claude` として出ます。
+
+---
+
 ## 🔄 デプロイの流れ
 
 ```mermaid
@@ -240,7 +264,7 @@ CNPG の CRD は `infrastructure` の HelmRelease が入れるため、`Cluster`
 lab
 ├── .github/
 │   ├── workflows/deploy.yaml          # CI: plan / apply / Flux 適用
-│   └── dependabot.yml                 # cloudflared / anubis / fantasy イメージの更新 PR
+│   └── dependabot.yml                 # cloudflared / anubis / fantasy / playwright-mcp イメージの更新 PR
 ├── fluxcd/                            # Flux 本体と Kustomization 定義
 │   ├── flux-system/
 │   ├── infrastructure.yaml
@@ -256,6 +280,7 @@ lab
 │   └── cloudflare/                    # cloudflared Deployment(Dependabot で更新 PR)
 ├── apps/
 │   ├── anubis/                        # anubis.riya.work(Anubis → nginx、サイトのコードは tsuji-riya/anubis.riya.work)
+│   ├── claude/                        # Claude Code の Remote Control サーバー(Playwright MCP 付き)
 │   ├── fantasy/                       # fantasy.riya.work(サイトのコードは tsuji-riya/fantasy.riya.work)
 │   ├── headlamp/                      # Headlamp HelmRelease
 │   └── victoria-logs/                 # VictoriaLogs + Vector(ログ)

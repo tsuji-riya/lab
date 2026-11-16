@@ -1,0 +1,79 @@
+# Playwright MCP 公式イメージ(Debian + Node + Chromium)に Claude Code を同居させ、`claude rc` を常駐させる。
+# Playwright MCP は stdio で Claude のセッションごとに起動するので、使っていない間は Chromium が動かずメモリを食わない
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: claude
+  namespace: claude
+spec:
+  replicas: 1
+  # RWO の PVC を新旧 Pod で取り合わないよう、旧 Pod を止めてから新 Pod を作る
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: claude
+  template:
+    metadata:
+      labels:
+        app: claude
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - { key: kubernetes.io/hostname, operator: In, values: [node1, node2, node3] }
+      securityContext:
+        # イメージの node ユーザー
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: claude
+          image: mcr.microsoft.com/playwright/mcp:v0.0.85
+          # 初回の `claude auth login` と Remote Control の確認(y/n)に `kubectl attach -it` で答えるため
+          stdin: true
+          tty: true
+          workingDir: /home/node
+          command: ["bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              export PATH="$HOME/.local/bin:$PATH"
+              # 本体は PVC に入れて再起動のたびに落とさない。npm の prefix が書き込めるので自動更新も効く
+              command -v claude >/dev/null || npm install -g --prefix "$HOME/.local" --cache /tmp/npm @anthropic-ai/claude-code
+              claude mcp get playwright >/dev/null 2>&1 \
+                || claude mcp add -s user playwright -- node /app/cli.js --headless --browser chromium --no-sandbox --isolated
+              # 無人のスケジュール実行でブラウザ操作が承認待ちで止まらないよう許可しておく。以後は自由に編集してよい
+              [ -f "$HOME/.claude/settings.json" ] \
+                || { mkdir -p "$HOME/.claude"; echo '{"permissions":{"allow":["mcp__playwright"]}}' > "$HOME/.claude/settings.json"; }
+              # setup-token は Remote Control に使えないので、claude.ai の通常ログインが要る
+              claude auth status 2>/dev/null | grep '"loggedIn": true' >/dev/null || claude auth login
+              # ホームディレクトリは信頼設定が保存されないので、その下の作業用ディレクトリで動かす
+              mkdir -p "$HOME/work" && cd "$HOME/work"
+              # 同時セッション数を絞ってメモリ上限を守る。ネットワーク断が長いと rc は終了するので、kubelet の再起動に任せる
+              exec claude remote-control --name lab-claude --spawn same-dir --capacity 2
+          resources:
+            requests:
+              cpu: 50m
+              memory: 512Mi
+            limits:
+              # Claude 本体 + セッション 2 つ + Chromium 2 つが収まる程度
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: home
+              mountPath: /home/node
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: home
+          persistentVolumeClaim:
+            claimName: home
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Gi
