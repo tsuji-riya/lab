@@ -18,12 +18,9 @@ spec:
       labels:
         app: claude
     spec:
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - { key: kubernetes.io/hostname, operator: In, values: [node1, node2, node3] }
+      # node1-3(ミニ PC)。postgres と同じく etcd ロールで選ぶ(ホスト名は node1.k3s.riya.work 形式)
+      nodeSelector:
+        node-role.kubernetes.io/etcd: "true"
       securityContext:
         # イメージの node ユーザー
         runAsUser: 1000
