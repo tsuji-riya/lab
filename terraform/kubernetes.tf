@@ -20,3 +20,22 @@ resource "kubernetes_namespace_v1" "postgres" {
     name = "postgres"
   }
 }
+
+resource "kubernetes_namespace_v1" "claude" {
+  metadata {
+    name = "claude"
+  }
+}
+
+# Pod が初回だけ `claude auth login` で使う。リフレッシュトークンは使い捨てなので、PVC が消えたときだけ入れ直す
+resource "kubernetes_secret_v1" "claude_oauth" {
+  metadata {
+    name      = "claude-oauth"
+    namespace = kubernetes_namespace_v1.claude.metadata[0].name
+  }
+
+  data = {
+    refresh-token = var.claude_oauth_refresh_token
+    scopes        = var.claude_oauth_scopes
+  }
+}
