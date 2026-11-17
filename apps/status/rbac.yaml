@@ -1,0 +1,39 @@
+# Gatus が k3s API でノードの Ready を見るための読み取り専用アカウント
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gatus
+  namespace: status
+automountServiceAccountToken: false
+---
+# Gatus はヘッダーにファイルを読めず環境変数しか使えないので、期限なしのトークンを Secret で発行する
+apiVersion: v1
+kind: Secret
+metadata:
+  name: gatus-token
+  namespace: status
+  annotations:
+    kubernetes.io/service-account.name: gatus
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: status-node-reader
+rules:
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: status-node-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: status-node-reader
+subjects:
+  - kind: ServiceAccount
+    name: gatus
+    namespace: status

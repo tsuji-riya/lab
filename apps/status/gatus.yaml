@@ -1,0 +1,73 @@
+# status.riya.work に出す死活監視の設定。ここに足した endpoint はそのままページに並ぶ
+web:
+  # 外へは同じ Pod の nginx 経由で API だけを出す
+  address: 127.0.0.1
+  port: 8081
+
+# shortcut: 結果はメモリにしか持たないので、Pod が再起動すると履歴が消える。長期の稼働率が欲しくなったら共有 PostgreSQL に移す
+storage:
+  type: memory
+
+site: &site
+  group: sites
+  interval: 1m
+  conditions:
+    - "[STATUS] == 200"
+
+# ノードの Ready を k3s API から読む。Ready の condition だけが "type":"Ready","status":"True" の並びになる
+node: &node
+  group: cluster
+  interval: 1m
+  headers:
+    Authorization: "Bearer ${K8S_TOKEN}"
+  conditions:
+    - "[STATUS] == 200"
+    - '[BODY] == pat(*"type":"Ready","status":"True"*)'
+
+endpoints:
+  - name: riya.work
+    <<: *site
+    url: https://riya.work/
+  - name: blog.riya.work
+    <<: *site
+    url: https://blog.riya.work/
+  # / は Anubis のチェッカーが返るので、素通しされる画像で奥の nginx まで届くかを見る
+  - name: anubis.riya.work
+    <<: *site
+    url: https://anubis.riya.work/happy.webp
+  - name: fantasy.riya.work
+    <<: *site
+    url: https://fantasy.riya.work/
+
+  - name: k3s API
+    <<: *node
+    url: https://kubernetes.default.svc/readyz
+    conditions:
+      - "[STATUS] == 200"
+  - name: PostgreSQL
+    group: cluster
+    interval: 1m
+    url: tcp://postgres-rw.postgres.svc.cluster.local:5432
+    conditions:
+      - "[CONNECTED] == true"
+  - name: node1
+    <<: *node
+    url: https://kubernetes.default.svc/api/v1/nodes/node1
+  - name: node2
+    <<: *node
+    url: https://kubernetes.default.svc/api/v1/nodes/node2
+  - name: node3
+    <<: *node
+    url: https://kubernetes.default.svc/api/v1/nodes/node3
+  - name: node4
+    <<: *node
+    url: https://kubernetes.default.svc/api/v1/nodes/node4
+  - name: node5
+    <<: *node
+    url: https://kubernetes.default.svc/api/v1/nodes/node5
+  - name: node6
+    <<: *node
+    url: https://kubernetes.default.svc/api/v1/nodes/node6
+  - name: node7
+    <<: *node
+    url: https://kubernetes.default.svc/api/v1/nodes/node7

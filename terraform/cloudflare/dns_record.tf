@@ -44,3 +44,23 @@ resource "cloudflare_dns_record" "fantasy" {
   proxied = true
   ttl     = 1
 }
+
+# status.riya.work (GitHub Pages) が読む Gatus の API。公開の死活情報だけなので Access なし
+resource "cloudflare_dns_record" "status_api" {
+  zone_id = var.zone_id
+  name    = local.status_api_hostname
+  type    = "CNAME"
+  content = "${cloudflare_zero_trust_tunnel_cloudflared.k3s.id}.cfargotunnel.com"
+  proxied = true
+  ttl     = 1
+}
+
+# ページ本体は tsuji-riya/status.riya.work の GitHub Pages。証明書を GitHub に発行させるためプロキシしない
+resource "cloudflare_dns_record" "status" {
+  zone_id = var.zone_id
+  name    = local.status_hostname
+  type    = "CNAME"
+  content = "tsuji-riya.github.io"
+  proxied = false
+  ttl     = 1
+}

@@ -19,3 +19,9 @@ updates:
       interval: daily
     cooldown:
       default-days: 3
+  - package-ecosystem: docker
+    directory: /apps/status
+    schedule:
+      interval: daily
+    cooldown:
+      default-days: 3

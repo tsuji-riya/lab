@@ -138,6 +138,7 @@ flowchart TB
 | アプリ | VictoriaLogs (chart `0.13.12`) + Vector | ログの収集と Web UI |
 | アプリ | Anubis `v1.28.2` + nginx ([tsuji-riya/anubis.riya.work](https://github.com/tsuji-riya/anubis.riya.work) のイメージ) | Anubis のチェッカーを通ると、Anubis ちゃんを無限に出し続ける静的サイト |
 | アプリ | fantasy ([tsuji-riya/fantasy.riya.work](https://github.com/tsuji-riya/fantasy.riya.work) のイメージ) | Fantasy Zone をブラウザで遊ぶ静的サイト。ROM は利用者が手元から読み込む |
+| アプリ | Gatus `v5.38.0` + nginx | 死活監視の API。ページ本体は [tsuji-riya/status.riya.work](https://github.com/tsuji-riya/status.riya.work) (GitHub Pages) |
 
 ---
 
@@ -150,6 +151,8 @@ flowchart TB
 | `logs.riya.work` | `victoria-logs-victoria-logs-single-server.victoria-logs:9428` | Cloudflare Access (`owner-only`) |
 | `anubis.riya.work` | `anubis.anubis:80` | なし (公開)。開くたびに Anubis のチェッカーが出る |
 | `fantasy.riya.work` | `fantasy.fantasy:80` | なし (公開)。ROM はサーバーに置かない |
+| `status-api.riya.work` | `status.status:80` | なし (公開)。Gatus の `/api/v1/endpoints/statuses` だけを CORS 付きで出す |
+| `status.riya.work` | GitHub Pages (Tunnel を通らない) | なし (公開)。上の API を読んで表示する |
 | `lab-k3s-api.riya.work` | k3s API `:6443` | CI が Access のサービストークン経由で利用 |
 
 ---
@@ -240,7 +243,7 @@ CNPG の CRD は `infrastructure` の HelmRelease が入れるため、`Cluster`
 lab
 ├── .github/
 │   ├── workflows/deploy.yaml          # CI: plan / apply / Flux 適用
-│   └── dependabot.yml                 # cloudflared / anubis / fantasy イメージの更新 PR
+│   └── dependabot.yml                 # cloudflared / anubis / fantasy / status イメージの更新 PR
 ├── fluxcd/                            # Flux 本体と Kustomization 定義
 │   ├── flux-system/
 │   ├── infrastructure.yaml
@@ -258,6 +261,7 @@ lab
 │   ├── anubis/                        # anubis.riya.work(Anubis → nginx、サイトのコードは tsuji-riya/anubis.riya.work)
 │   ├── fantasy/                       # fantasy.riya.work(サイトのコードは tsuji-riya/fantasy.riya.work)
 │   ├── headlamp/                      # Headlamp HelmRelease
+│   ├── status/                        # status.riya.work の API(Gatus → nginx、ページは tsuji-riya/status.riya.work)
 │   └── victoria-logs/                 # VictoriaLogs + Vector(ログ)
 └── terraform/
     ├── cloudflare/                    # Tunnel / DNS / Access
