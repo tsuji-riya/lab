@@ -14,10 +14,16 @@ spec:
       labels:
         app: anubis
     spec:
+      # どちらのコンテナも Kubernetes API を使わないので SA トークンを渡さない
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         # 前段で Anubis のチェッカーを出し、通ったリクエストだけ nginx に渡す
         - name: anubis
-          image: ghcr.io/techarohq/anubis:v1.28.2
+          image: ghcr.io/techarohq/anubis:v1.28.2@sha256:5fcbce70ee6168be5b226d19bec90111d0acd0daf13028fa06b044cf3ebbbd5f
           ports:
             - name: http
               containerPort: 8923
@@ -37,6 +43,8 @@ spec:
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
+            runAsUser: 1000
+            runAsGroup: 1000
             capabilities:
               drop: [ALL]
           resources:
@@ -55,13 +63,15 @@ spec:
               readOnly: true
         - name: nginx
           # サイト本体は tsuji-riya/anubis.riya.work でビルドしたイメージ (nginx + 静的ファイル)
-          image: ghcr.io/tsuji-riya/anubis.riya.work:1.0.1
+          image: ghcr.io/tsuji-riya/anubis.riya.work:1.0.1@sha256:296389e1867d3d600063ebd572070c2a7812fc2ddbb1e5e596dce0ef57729d21
           ports:
             - name: nginx
               containerPort: 8080
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
+            runAsUser: 101
+            runAsGroup: 101
             capabilities:
               drop: [ALL]
           resources:
