@@ -1,0 +1,31 @@
+name: renovate
+
+# Dependabot が対象にできない Helm チャート (HelmRelease) と
+# ConfigMap 内の kubectl イメージを Renovate で更新する。
+# イメージと Action の更新は Dependabot 側が担当するので renovate.json で無効化してある
+on:
+  schedule:
+    # 月曜 02:30 JST (image-scan の 03:00 より前に回して PR を作る)
+    - cron: "30 17 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: renovatebot/github-action@v46.3.14
+        with:
+          configurationFile: renovate.json
+          # RENOVATE_TOKEN (PAT) があればそちらを使う。GITHUB_TOKEN で作った PR は
+          # 他のワークフロー (deploy の plan 等) が起動しないため、PAT の設定を推奨
+          token: ${{ secrets.RENOVATE_TOKEN || secrets.GITHUB_TOKEN }}

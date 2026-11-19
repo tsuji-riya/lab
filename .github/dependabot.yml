@@ -39,9 +39,9 @@ updates:
       default-days: 3
   # fluxcd/flux-system の Flux コントローラは gotk-components.yaml を
   # flux CLI で一括再生成して上げるものなので、個別に上げないよう対象にしない。
-  # Helm チャートのバージョン (HelmRelease の spec.chart.spec.version) も
+  # Helm チャートのバージョン (HelmRelease の spec.chart.spec.version) は
   # Chart.yaml が無いこのリポジトリでは Dependabot の対象にできないため、
-  # headlamp / victoria-logs / cnpg / longhorn は従来どおり手動で上げる
+  # Renovate (renovate.json + .github/workflows/renovate.yaml) が担当する
 
   # ワークフローで使う Action (checkout, Trivy 等) の更新
   - package-ecosystem: github-actions
