@@ -1,0 +1,59 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "customManagers": [
+    {
+      "customType": "regex",
+      "datasourceTemplate": "docker",
+      "description": "SUC の ConfigMap に書かれた drain 用 kubectl イメージ (image: フィールドではないので Dependabot が見られない)",
+      "managerFilePatterns": [
+        "/^infrastructure/system-upgrade-controller/controller\\.yaml$/"
+      ],
+      "matchStrings": [
+        "SYSTEM_UPGRADE_JOB_KUBECTL_IMAGE:\\s*(?<depName>[^:\\s]+):(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[a-f0-9]+)"
+      ]
+    }
+  ],
+  "enabledManagers": [
+    "flux",
+    "custom.regex"
+  ],
+  "extends": [
+    "config:recommended"
+  ],
+  "ignorePaths": [
+    "fluxcd/flux-system/**"
+  ],
+  "minimumReleaseAge": "3 days",
+  "packageRules": [
+    {
+      "description": "Flux 本体は検証しながら手動で一括更新するので、flux-system 配下は Renovate 対象外",
+      "matchManagers": [
+        "flux"
+      ],
+      "matchFileNames": [
+        "fluxcd/flux-system/**"
+      ],
+      "enabled": false
+    },
+    {
+      "matchManagers": [
+        "flux"
+      ],
+      "matchDepTypes": [
+        "HelmChart"
+      ],
+      "groupName": "Helm チャート",
+      "groupSlug": "helm-charts"
+    }
+  ],
+  "prConcurrentLimit": 5,
+  "schedule": [
+    "at any time"
+  ],
+  "timezone": "Asia/Tokyo",
+  "flux": {
+    "managerFilePatterns": [
+      "/\\.ya?ml$/"
+    ]
+  }
+}
