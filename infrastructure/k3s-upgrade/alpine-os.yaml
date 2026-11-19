@@ -19,7 +19,7 @@ spec:
   jobActiveDeadlineSecs: 7200
   # cordon/drain より前に走る。対象外のノードを無駄に drain せず失敗させる
   prepare:
-    image: alpine:3.22
+    image: alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f
     command: ["sh", "-c"]
     args:
     - |
@@ -34,7 +34,7 @@ spec:
   drain:
     timeout: 30m
   upgrade:
-    image: alpine:3.22
+    image: alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f
     command: ["sh", "-c"]
     args:
     - |
@@ -98,10 +98,18 @@ spec:
         spec:
           serviceAccountName: alpine-os-trigger
           restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
           containers:
           - name: kubectl
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: [ALL]
             # SUC の drain に使っているものと同じイメージ(entrypoint が kubectl)
-            image: rancher/kubectl:v1.30.3
+            image: rancher/kubectl:v1.36.2@sha256:06c7a7a9772737494ae1e0c3af90f1b5385630c147e47c1c7cea92f4bed55fbe
             env:
             - name: JOB_NAME
               valueFrom:

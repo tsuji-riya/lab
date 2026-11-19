@@ -13,16 +13,24 @@ spec:
       labels:
         app: fantasy
     spec:
+      # Kubernetes API を使わないので SA トークンを渡さない
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         # サイト本体は tsuji-riya/fantasy.riya.work でビルドしたイメージ (nginx + EmulatorJS)。ROM は入っていない
         - name: nginx
-          image: ghcr.io/tsuji-riya/fantasy.riya.work:1.0.14
+          image: ghcr.io/tsuji-riya/fantasy.riya.work:1.0.14@sha256:9e8a91736df6828fe50ac52b21509290dc7606f03a9cd8ec617ba367d2a6dacc
           ports:
             - name: http
               containerPort: 8080
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
+            runAsUser: 101
+            runAsGroup: 101
             capabilities:
               drop: [ALL]
           resources:

@@ -200,7 +200,9 @@ data:
   SYSTEM_UPGRADE_JOB_ACTIVE_DEADLINE_SECONDS: "900"
   SYSTEM_UPGRADE_JOB_BACKOFF_LIMIT: "99"
   SYSTEM_UPGRADE_JOB_IMAGE_PULL_POLICY: Always
-  SYSTEM_UPGRADE_JOB_KUBECTL_IMAGE: rancher/kubectl:v1.30.3
+  # drain 用 kubectl。Go の脆弱性が多かった v1.30.3 から更新 (サーバ 1.37 系との skew も解消)。
+  # ConfigMap の data 値は Dependabot が見ないので、alpine-os.yaml 側と手動で揃える
+  SYSTEM_UPGRADE_JOB_KUBECTL_IMAGE: rancher/kubectl:v1.36.2@sha256:06c7a7a9772737494ae1e0c3af90f1b5385630c147e47c1c7cea92f4bed55fbe
   SYSTEM_UPGRADE_JOB_KUBECTL_IMAGE_WINDOWS: ""
   SYSTEM_UPGRADE_JOB_PRIVILEGED: "true"
   SYSTEM_UPGRADE_JOB_TTL_SECONDS_AFTER_FINISH: "900"
@@ -265,7 +267,7 @@ spec:
         envFrom:
         - configMapRef:
             name: default-controller-env
-        image: rancher/system-upgrade-controller:v0.21.0
+        image: rancher/system-upgrade-controller:v0.21.0@sha256:52f31eb3f2dcd3c937c8390bcb90d8a7f019832d9b131690a51c3f95decad443
         imagePullPolicy: IfNotPresent
         name: system-upgrade-controller
         securityContext:

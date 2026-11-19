@@ -1,0 +1,61 @@
+name: image-scan
+
+# このリポジトリで動くコンテナイメージの脆弱性を Trivy で定期スキャンし、
+# 結果を Security タブ (code scanning) に上げる。マニフェスト変更時の PR でも回す
+on:
+  pull_request:
+    paths: [apps/**, infrastructure/**, fluxcd/**, .github/workflows/image-scan.yaml]
+  schedule:
+    # 月曜 03:00 JST
+    - cron: "0 18 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: image-scan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  list-images:
+    runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.list.outputs.images }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: list
+        run: |
+          # image: の値のうちタグか digest が付いたものだけを対象にする。
+          # rancher/k3s-upgrade はタグ無し (SUC が channel から解決) なので外れる
+          images=$(grep -rhoE 'image: [^ ]+' apps infrastructure fluxcd --include='*.yaml' \
+            | awk '{print $2}' | grep -E '.:|@' | sort -u | jq -R . | jq -sc .)
+          echo "images=$images" >> "$GITHUB_OUTPUT"
+          echo "$images" | jq .
+
+  scan:
+    needs: list-images
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.list-images.outputs.images) }}
+    steps:
+      - name: Scan ${{ matrix.image }}
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: HIGH,CRITICAL
+          # 修正版が無い脆弱性はノイズになるので載せない
+          ignore-unfixed: true
+          # 検出してもジョブは落とさず、Security タブのアラートで追う
+          exit-code: "0"
+
+      - uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-${{ matrix.image }}

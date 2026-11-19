@@ -20,15 +20,35 @@ spec:
       labels:
         app: tunnel
     spec:
+      # Kubernetes API を使わないので SA トークンを渡さない
+      automountServiceAccountToken: false
+      securityContext:
+        # イメージの User は 65532 (non-root)
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: tunnel
-          image: cloudflare/cloudflared:2026.11.0
+          image: cloudflare/cloudflared:2026.11.0@sha256:b94b96edf2c9c4360f8879c8580cfaa99077f19c849ec595ca2f711b27d4f344
           args:
             - tunnel
             - --no-autoupdate
             - --metrics
             - 0.0.0.0:2000
             - run
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
           env:
             - name: TUNNEL_TOKEN
               valueFrom:

@@ -1,5 +1,7 @@
 version: 2
 updates:
+  # Kubernetes マニフェスト内の image: タグ (digest 固定含む) を更新する。
+  # マニフェストがあるディレクトリごとに 1 エントリ必要
   - package-ecosystem: docker
     directory: /infrastructure/cloudflare
     schedule:
@@ -17,5 +19,34 @@ updates:
     directory: /apps/fantasy
     schedule:
       interval: daily
+    cooldown:
+      default-days: 3
+  # rancher/system-upgrade-controller のイメージ用
+  - package-ecosystem: docker
+    directory: /infrastructure/system-upgrade-controller
+    schedule:
+      interval: daily
+    cooldown:
+      default-days: 3
+  # alpine (Alpine OS 週次更新 Plan) と rancher/kubectl (CronJob) 用。
+  # plan.yaml の rancher/k3s-upgrade はタグ無しで、バージョンは SUC の
+  # channel から解決されるため Dependabot の対象外
+  - package-ecosystem: docker
+    directory: /infrastructure/k3s-upgrade
+    schedule:
+      interval: daily
+    cooldown:
+      default-days: 3
+  # fluxcd/flux-system の Flux コントローラは gotk-components.yaml を
+  # flux CLI で一括再生成して上げるものなので、個別に上げないよう対象にしない。
+  # Helm チャートのバージョン (HelmRelease の spec.chart.spec.version) も
+  # Chart.yaml が無いこのリポジトリでは Dependabot の対象にできないため、
+  # headlamp / victoria-logs / cnpg / longhorn は従来どおり手動で上げる
+
+  # ワークフローで使う Action (checkout, Trivy 等) の更新
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
     cooldown:
       default-days: 3
