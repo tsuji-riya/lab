@@ -133,7 +133,8 @@ flowchart TB
 | ストレージ | Longhorn `1.13.0` | SSD の分散ブロックストレージ |
 | データベース | CloudNativePG `0.29.1` | 共有 PostgreSQL クラスタ |
 | 公開経路 | Cloudflare Tunnel (`cloudflared` x2) | ポート開放なしで外部公開 |
-| 認証 | Cloudflare Access | Longhorn UI / Headlamp / VictoriaLogs を自分だけに制限 |
+| 認証 | Cloudflare Access + GitHub ログイン | Longhorn UI / Headlamp / VictoriaLogs を自分だけに制限。ログインは GitHub (OAuth) |
+| アプリ | Gitea (chart `12.7.0`) | Git ホスティング。DB は共有 PostgreSQL、ログインは GitHub (OAuth) |
 | アプリ | Headlamp (chart `0.46.0`) | Kubernetes の Web UI |
 | アプリ | VictoriaLogs (chart `0.13.12`) + Vector | ログの収集と Web UI |
 | アプリ | Anubis `v1.28.2` + nginx ([tsuji-riya/anubis.riya.work](https://github.com/tsuji-riya/anubis.riya.work) のイメージ) | Anubis のチェッカーを通ると、Anubis ちゃんを無限に出し続ける静的サイト |
@@ -150,6 +151,7 @@ flowchart TB
 | `logs.riya.work` | `victoria-logs-victoria-logs-single-server.victoria-logs:9428` | Cloudflare Access (`owner-only`) |
 | `anubis.riya.work` | `anubis.anubis:80` | なし (公開)。開くたびに Anubis のチェッカーが出る |
 | `fantasy.riya.work` | `fantasy.fantasy:80` | なし (公開)。ROM はサーバーに置かない |
+| `gitea.riya.work` | `gitea-http.gitea:3000` | Access なし (git の HTTPS を通すため)。Gitea 側で新規登録を止め、GitHub ログインは既存アカウントへの紐付けのみ |
 | `lab-k3s-api.riya.work` | k3s API `:6443` | CI が Access のサービストークン経由で利用 |
 
 ---
@@ -169,7 +171,7 @@ Longhorn のデフォルトディスクは `ssd` のものだけに絞ってい�
 - `postgres` namespace にプライマリとスタンバイの 2 台を置き、非同期レプリケーションします
 - Pod Anti-Affinity で別ノードに分散し、`etcd` ロールのノードに配置します
 - `wal_compression` と `checkpoint_timeout: 15min` で WAL の量を抑えます
-- アプリごとのロールと DB は `infrastructure/postgres/` に追加します (今はまだありません)
+- アプリごとのロールは `cluster.yaml` の `managed.roles`、DB は `Database` として `infrastructure/postgres/` に追加します (今は `gitea`)
 
 ---
 
@@ -257,6 +259,7 @@ lab
 ├── apps/
 │   ├── anubis/                        # anubis.riya.work(Anubis → nginx、サイトのコードは tsuji-riya/anubis.riya.work)
 │   ├── fantasy/                       # fantasy.riya.work(サイトのコードは tsuji-riya/fantasy.riya.work)
+│   ├── gitea/                         # gitea.riya.work(Gitea HelmRelease)
 │   ├── headlamp/                      # Headlamp HelmRelease
 │   └── victoria-logs/                 # VictoriaLogs + Vector(ログ)
 └── terraform/
@@ -272,6 +275,26 @@ lab
 - DB と管理者のパスワードは Terraform の `random_password` で生成し、Kubernetes Secret として配置します
 - Tunnel トークンも Terraform が作って Secret に格納します
 - Git には平文のシークレットを置かず、CI の GitHub Secrets 経由で渡します
+
+---
+
+## 🔑 GitHub ログインの準備 (初回だけ)
+
+GitHub の OAuth App は API で作れないので手で 2 つ作り、値を GitHub Secrets に入れます。
+コールバック URL がホストごとに違い、1 つの OAuth App には 1 つしか登録できないためです。
+
+| 用途 | Authorization callback URL | GitHub Secrets |
+| --- | --- | --- |
+| Cloudflare Access | `https://<チーム名>.cloudflareaccess.com/cdn-cgi/access/callback` | `ACCESS_GITHUB_CLIENT_ID` / `ACCESS_GITHUB_CLIENT_SECRET` |
+| Gitea | `https://gitea.riya.work/user/oauth2/github/callback` | `GITEA_GITHUB_CLIENT_ID` / `GITEA_GITHUB_CLIENT_SECRET` |
+
+Access の通過判定は今までどおり `owner-only` のメールアドレスなので、GitHub アカウントの primary メールが一致している必要があります。
+
+Gitea は初回だけ次の手順で GitHub と紐付けます。
+
+1. 管理者のパスワードを取り出す: `kubectl -n gitea get secret gitea-admin -o jsonpath='{.data.password}' | base64 -d`
+2. `gitea.riya.work` で「GitHub でサインイン」→ 紐付け画面で `tsuji-riya` とそのパスワードでログイン
+3. 以後は GitHub だけでログインできます。git の push / clone は Gitea のアクセストークンを使います (SSH は無効)
 
 ---
 

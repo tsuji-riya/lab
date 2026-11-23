@@ -5,6 +5,10 @@ resource "cloudflare_zero_trust_access_application" "longhorn" {
   type             = "self_hosted"
   session_duration = "24h"
 
+  # ログイン方法の選択画面を出さず GitHub へ直行する
+  allowed_idps              = [cloudflare_zero_trust_access_identity_provider.github.id]
+  auto_redirect_to_identity = true
+
   policies = [
     {
       id         = cloudflare_zero_trust_access_policy.owner_only.id
@@ -20,6 +24,10 @@ resource "cloudflare_zero_trust_access_application" "headlamp" {
   type             = "self_hosted"
   session_duration = "24h"
 
+  # ログイン方法の選択画面を出さず GitHub へ直行する
+  allowed_idps              = [cloudflare_zero_trust_access_identity_provider.github.id]
+  auto_redirect_to_identity = true
+
   policies = [
     {
       id         = cloudflare_zero_trust_access_policy.owner_only.id
@@ -34,6 +42,10 @@ resource "cloudflare_zero_trust_access_application" "logs" {
   domain           = local.logs_hostname
   type             = "self_hosted"
   session_duration = "24h"
+
+  # ログイン方法の選択画面を出さず GitHub へ直行する
+  allowed_idps              = [cloudflare_zero_trust_access_identity_provider.github.id]
+  auto_redirect_to_identity = true
 
   policies = [
     {

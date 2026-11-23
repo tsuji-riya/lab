@@ -23,3 +23,10 @@ spec:
     topologyKey: kubernetes.io/hostname
     nodeSelector:
       node-role.kubernetes.io/etcd: "true"
+  # アプリごとのログインロール。パスワードは Terraform が作る同名の Secret (basic-auth) から読む
+  managed:
+    roles:
+      - name: gitea
+        login: true
+        passwordSecret:
+          name: gitea-db

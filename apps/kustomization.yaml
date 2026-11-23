@@ -3,5 +3,6 @@ kind: Kustomization
 resources:
 - anubis
 - fantasy
+- gitea
 - headlamp
 - victoria-logs
