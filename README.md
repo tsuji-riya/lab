@@ -133,7 +133,7 @@ flowchart TB
 | ストレージ | Longhorn `1.13.0` | SSD の分散ブロックストレージ |
 | データベース | CloudNativePG `0.29.1` | 共有 PostgreSQL クラスタ |
 | 公開経路 | Cloudflare Tunnel (`cloudflared` x2) | ポート開放なしで外部公開 |
-| 認証 | Cloudflare Access + GitHub ログイン | Longhorn UI / Headlamp / VictoriaLogs を自分だけに制限。ログインは GitHub (OAuth) |
+| 認証 | Cloudflare Access | Longhorn UI / Headlamp / VictoriaLogs を自分だけに制限 |
 | アプリ | Gitea (chart `12.7.0`) | Git ホスティング。DB は共有 PostgreSQL、ログインは GitHub (OAuth) |
 | アプリ | Headlamp (chart `0.46.0`) | Kubernetes の Web UI |
 | アプリ | VictoriaLogs (chart `0.13.12`) + Vector | ログの収集と Web UI |
@@ -280,15 +280,11 @@ lab
 
 ## 🔑 GitHub ログインの準備 (初回だけ)
 
-GitHub の OAuth App は API で作れないので手で 2 つ作り、値を GitHub Secrets に入れます。
-コールバック URL がホストごとに違い、1 つの OAuth App には 1 つしか登録できないためです。
+Gitea のログインに使う GitHub の OAuth App は API で作れないので手で作り、値を GitHub Secrets に入れます。
 
 | 用途 | Authorization callback URL | GitHub Secrets |
 | --- | --- | --- |
-| Cloudflare Access | `https://<チーム名>.cloudflareaccess.com/cdn-cgi/access/callback` | `ACCESS_GITHUB_CLIENT_ID` / `ACCESS_GITHUB_CLIENT_SECRET` |
 | Gitea | `https://gitea.riya.work/user/oauth2/github/callback` | `GITEA_GITHUB_CLIENT_ID` / `GITEA_GITHUB_CLIENT_SECRET` |
-
-Access の通過判定は今までどおり `owner-only` のメールアドレスなので、GitHub アカウントの primary メールが一致している必要があります。
 
 Gitea は初回だけ次の手順で GitHub と紐付けます。
 

@@ -25,8 +25,6 @@ env:
   TF_VAR_k8s_client_key: ${{ secrets.K8S_CLIENT_KEY }}
   TF_VAR_gitea_github_client_id: ${{ secrets.GITEA_GITHUB_CLIENT_ID }}
   TF_VAR_gitea_github_client_secret: ${{ secrets.GITEA_GITHUB_CLIENT_SECRET }}
-  TF_VAR_access_github_client_id: ${{ secrets.ACCESS_GITHUB_CLIENT_ID }}
-  TF_VAR_access_github_client_secret: ${{ secrets.ACCESS_GITHUB_CLIENT_SECRET }}
 
 jobs:
   deploy:

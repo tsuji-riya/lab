@@ -27,13 +27,3 @@ variable "gitea_github_client_secret" {
   type      = string
   sensitive = true
 }
-
-# GitHub OAuth App (Cloudflare Access 用、callback: https://<team>.cloudflareaccess.com/cdn-cgi/access/callback)
-variable "access_github_client_id" {
-  type = string
-}
-
-variable "access_github_client_secret" {
-  type      = string
-  sensitive = true
-}
