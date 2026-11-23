@@ -4,6 +4,7 @@ locals {
   logs_hostname     = "logs.riya.work"
   anubis_hostname   = "anubis.riya.work"
   fantasy_hostname  = "fantasy.riya.work"
+  gitea_hostname    = "gitea.riya.work"
 }
 
 resource "random_bytes" "tunnel_secret" {
@@ -41,6 +42,10 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "k3s" {
       {
         hostname = local.fantasy_hostname
         service  = "http://fantasy.fantasy.svc.cluster.local:80"
+      },
+      {
+        hostname = local.gitea_hostname
+        service  = "http://gitea-http.gitea.svc.cluster.local:3000"
       },
       {
         service = "http_status:404"

@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Namespace は Secret と一緒に Terraform (terraform/kubernetes.tf) が作る
+resources:
+- helmrepository.yaml
+- helmrelease.yaml
+- networkpolicy.yaml

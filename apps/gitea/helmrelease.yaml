@@ -1,0 +1,72 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: gitea
+  namespace: gitea
+spec:
+  chart:
+    spec:
+      chart: gitea
+      reconcileStrategy: ChartVersion
+      sourceRef:
+        kind: HelmRepository
+        name: gitea
+      version: 12.7.0
+  interval: 24h
+  values:
+    # DB は共有の CNPG クラスタを使い、キャッシュ/セッション/キューは Pod 内 (memory / level) で足りるので同梱チャートは入れない
+    postgresql:
+      enabled: false
+    postgresql-ha:
+      enabled: false
+    valkey-cluster:
+      enabled: false
+    valkey:
+      enabled: false
+    # リポジトリの実体なので 3 レプリカの既定 StorageClass に置く (longhorn-ssd-single は 1 レプリカ)
+    persistence:
+      storageClass: longhorn
+      size: 10Gi
+    # /data は RWO で level キューも Pod 内なので、2 台同時に立てず入れ替える
+    strategy:
+      type: Recreate
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: [ALL]
+    gitea:
+      # 初回だけ作る管理者。ふだんは GitHub でログインし、初回にこのアカウントへ紐付ける
+      admin:
+        existingSecret: gitea-admin
+        email: tsuji.riya@gmail.com
+        passwordMode: initialOnlyNoReset
+      oauth:
+        - name: github
+          provider: github
+          existingSecret: gitea-oauth-github
+          scopes: read:user,user:email
+      # DB のパスワード (database.PASSWD) は Terraform が作る Secret から入れる
+      additionalConfigSources:
+        - secret:
+            secretName: gitea-db
+      config:
+        server:
+          DOMAIN: gitea.riya.work
+          ROOT_URL: https://gitea.riya.work/
+          # Cloudflare Tunnel は HTTP だけ通すので SSH は無効。git は HTTPS + アクセストークンで使う
+          DISABLE_SSH: true
+          START_SSH_SERVER: false
+        database:
+          DB_TYPE: postgres
+          HOST: postgres-rw.postgres.svc.cluster.local:5432
+          NAME: gitea
+          USER: gitea
+          SSL_MODE: require
+        service:
+          # 新規登録は GitHub 経由も含めて止める。使えるのは管理者が作ったアカウントだけ
+          DISABLE_REGISTRATION: true
+        oauth2_client:
+          # 知らない GitHub ユーザーでアカウントを作らせない。初回は既存アカウントでログインして紐付ける
+          ENABLE_AUTO_REGISTRATION: false
+          ACCOUNT_LINKING: login

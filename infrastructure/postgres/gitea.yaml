@@ -1,0 +1,11 @@
+# Gitea 用 DB。ロール gitea は cluster.yaml の managed.roles で作る
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: gitea
+  namespace: postgres
+spec:
+  name: gitea
+  owner: gitea
+  cluster:
+    name: postgres
