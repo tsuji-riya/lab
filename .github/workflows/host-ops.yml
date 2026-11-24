@@ -2,15 +2,15 @@ name: Host ops
 
 # ホスト OS の変更 (パッケージ更新 / 再起動) を GitHub から実行する。
 #
-# 実行経路: GitHub-hosted runner は LAN に届かないため、Mac 上の
-# self-hosted runner (label: lab-lan) が Ansible を実行する。
-# Environment host-ops の required reviewers が実行承認ゲート。
+# 実行経路: GitHub-hosted runner が Tailscale 経由でホストに SSH する
+# (self-hosted runner は使わない)。承認と秘密の境界は Environment
+# host-ops に寄せてある:
+# - required reviewers の承認が無いとジョブが始まらない
+# - SSH 秘密鍵・kubeconfig・Tailscale OAuth は Environment シークレット
+#   に置き、承認済みジョブにしか渡らない
+# - Tailscale の ACL で tag:ci から tag:host の tcp/22 だけに絞る
 #
-# 安全上の決め事:
-# - この workflow は workflow_dispatch 専用。self-hosted runner を使う
-#   workflow に pull_request トリガーを絶対に足さない (fork PR の毒入り
-#   コードが LAN 内で実行される事故になる)
-# - 再起動は playbook 側で serial: 1 + drain/uncordon/Ready 確認までやる
+# workflow_dispatch 専用。pull_request トリガーは足さないこと。
 
 on:
   workflow_dispatch:
@@ -45,20 +45,40 @@ concurrency:
 
 jobs:
   ops:
-    runs-on: [self-hosted, lab-lan]
-    environment: host-ops   # ← 実行承認 (required reviewers)
+    runs-on: ubuntu-24.04
+    environment: host-ops   # ← 実行承認ゲート
     timeout-minutes: 120
-    defaults:
-      run:
-        working-directory: hosts/ansible
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: Connect to tailnet (ephemeral)
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+      - name: Prepare SSH key and kubeconfig (Environment secrets)
+        env:
+          LAB_ADMIN_SSH_KEY: ${{ secrets.LAB_ADMIN_SSH_KEY }}
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
+        run: |
+          install -d -m 700 ~/.ssh ~/.kube
+          printf '%s\n' "$LAB_ADMIN_SSH_KEY" > ~/.ssh/lab_admin
+          chmod 600 ~/.ssh/lab_admin
+          printf '%s' "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+      - name: Install Ansible and kubectl
+        run: |
+          pip install --quiet ansible-core
+          curl -fsSLO "https://dl.k8s.io/release/$(curl -fsSL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          sudo install -m 755 kubectl /usr/local/bin/kubectl
       - name: Run ops playbook
+        working-directory: hosts/ansible
         env:
           OP: ${{ inputs.operation }}
           TARGET: ${{ inputs.target }}
         run: |
-          ansible-playbook ops.yml -e "op=${OP}" --limit "${TARGET}"
+          ansible-playbook ops.yml -i inventory/tailscale.yml \
+            -e "op=${OP}" --limit "${TARGET}"
       - name: Summary
         if: always()
         run: |

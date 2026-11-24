@@ -14,7 +14,7 @@ chown -R riya:riya /home/riya
 
 # サービス有効化 (実測: cgroups / iscsid / local は全台 default)
 # nftables と node-firstboot は新規分。k3s / k3s-agent は導入時に有効化される
-for svc in sshd nftables ntpd cgroups iscsid local node-firstboot; do
+for svc in sshd nftables ntpd cgroups iscsid local tailscaled node-firstboot; do
   rc-update add "$svc" default || rc-update add "$svc" boot
 done
 rc-update add networking boot || true

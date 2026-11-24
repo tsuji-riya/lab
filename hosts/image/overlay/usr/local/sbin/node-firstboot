@@ -48,5 +48,14 @@ if [ -n "$DISK" ] && [ -n "$PARTNO" ]; then
   resize2fs "$ROOT_DEV" || true
 fi
 
+# Tailscale 参加 (GitHub Actions からの到達用)。鍵は node.conf 経由で
+# 焼き込み時にだけ渡す。hostname は MagicDNS の短い名前に揃える
+if [ -n "${TS_AUTHKEY:-}" ]; then
+  rc-service tailscaled start || true
+  tailscale up --auth-key="$TS_AUTHKEY" \
+    --hostname="$(echo "$NODE_HOSTNAME" | cut -d. -f1)" \
+    --advertise-tags=tag:host || true
+fi
+
 date -u +%FT%TZ > "$MARKER"
 echo "firstboot done: $NODE_HOSTNAME $NODE_IP"
