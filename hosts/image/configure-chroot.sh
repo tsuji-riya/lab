@@ -14,8 +14,22 @@ chown -R riya:riya /home/riya
 
 # サービス有効化 (実測: cgroups / iscsid / local は全台 default)
 # nftables と node-firstboot は新規分。k3s / k3s-agent は導入時に有効化される
-for svc in sshd nftables ntpd cgroups iscsid local cf-tunnel node-firstboot; do
+for svc in sshd nftables ntpd cgroups iscsid local cf-tunnel; do
   rc-update add "$svc" default || rc-update add "$svc" boot
+done
+# identity 適用は networking より先 (boot ランレベル)
+rc-update add node-firstboot boot
+
+# 標準サービスの runlevel は openrc パッケージには含まれず、通常は
+# setup-alpine が入れる。自前で rootfs を組む場合は明示的に有効化する。
+# これが無いと localmount 不在で /boot がマウントされず node.conf が
+# 読めない、hwdrivers/mdev 不在で USB キーボードや NIC のドライバが
+# ロードされない、root 不在で / が rw 再マウントされない (node7 実機で発覚)
+for svc in devfs dmesg mdev; do
+  rc-update add "$svc" sysinit
+done
+for svc in root localmount hostname sysctl modules hwdrivers bootmisc urandom swap syslog; do
+  rc-update add "$svc" boot
 done
 rc-update add networking boot || true
 

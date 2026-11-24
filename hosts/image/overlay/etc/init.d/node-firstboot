@@ -1,9 +1,21 @@
 #!/sbin/openrc-run
+# shellcheck shell=sh disable=SC2034
 description="Apply per-node identity from node.conf on first boot"
-depend() { need net; before sshd; }
+
+# 静的 IP はこのスクリプトが /etc/network/interfaces に書くので、
+# networking より前に走らないと初回起動でネットワークが上がらない。
+# /boot (node.conf の置き場) のマウントが先に必要。
+depend() {
+  need localmount
+  before networking sshd
+}
+
 start() {
   ebegin "node firstboot"
   /usr/local/sbin/node-firstboot
   eend $?
-  rc-update del node-firstboot default 2>/dev/null || true
+  # 成功したときだけ runlevel から外す。失敗時は次回起動で再試行する
+  if [ -f /etc/lab-firstboot-done ]; then
+    rc-update del node-firstboot boot 2>/dev/null || true
+  fi
 }
