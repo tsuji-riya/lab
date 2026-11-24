@@ -58,7 +58,7 @@
       tmpfs  /tmp      tmpfs  nosuid,nodev,noatime,size=256m,mode=1777  0 0
       tmpfs  /var/log  tmpfs  nosuid,nodev,noatime,size=64m,mode=0755   0 0
 - name: "Extra mounts (台固有: host_vars で定義)"
-  mount:
+  ansible.posix.mount:
     path: "{{ item.path }}"
     src: "{{ item.src }}"
     fstype: "{{ item.fstype }}"
