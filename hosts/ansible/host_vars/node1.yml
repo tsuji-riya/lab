@@ -1,0 +1,6 @@
+---
+# node1 のみ内蔵 HDD を Longhorn 用にマウントしている (2026-11-25 実測)
+extra_mounts:
+  - path: /var/lib/longhorn-hdd
+    src: "UUID=566df1e9-6169-4443-8eca-c35b479f9090"
+    fstype: ext4

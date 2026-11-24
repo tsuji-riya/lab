@@ -26,6 +26,45 @@
       PermitRootLogin prohibit-password
       AllowUsers {{ admin_user }}
   notify: Reload sshd
+- name: Kernel modules (全台実測で同一)
+  copy:
+    dest: /etc/modules
+    content: |
+      af_packet
+      ipv6
+      iscsi_tcp
+      dm_crypt
+- name: rshared root mount (Longhorn の伝播に必須)
+  copy:
+    dest: /etc/local.d/rshared.start
+    mode: "0755"
+    content: |
+      #!/bin/sh
+      mount --make-rshared /
+- name: Services for k3s / Longhorn (全台実測で同一)
+  service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - cgroups
+    - iscsid
+    - local
+- name: tmpfs mounts (全台実測で同一)
+  blockinfile:
+    path: /etc/fstab
+    marker: "# {mark} lab-hosts tmpfs"
+    block: |
+      tmpfs  /tmp      tmpfs  nosuid,nodev,noatime,size=256m,mode=1777  0 0
+      tmpfs  /var/log  tmpfs  nosuid,nodev,noatime,size=64m,mode=0755   0 0
+- name: "Extra mounts (台固有: host_vars で定義)"
+  mount:
+    path: "{{ item.path }}"
+    src: "{{ item.src }}"
+    fstype: "{{ item.fstype }}"
+    opts: "{{ item.opts | default('defaults,nofail') }}"
+    state: mounted
+  loop: "{{ extra_mounts | default([]) }}"
 - name: root password locked
   user:
     name: root

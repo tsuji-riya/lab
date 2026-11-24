@@ -1,1 +1,10 @@
 linux-lts
+grub-efi
+linux-firmware-i915
+linux-firmware-intel
+linux-firmware-mediatek
+linux-firmware-other
+linux-firmware-rtl_bt
+linux-firmware-rtl_nic
+linux-firmware-rtw88
+linux-firmware-xe

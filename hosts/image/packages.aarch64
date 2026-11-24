@@ -1,2 +1,10 @@
 linux-rpi
 raspberrypi-bootloader
+cryptsetup
+gawk
+grep
+ip6tables
+iptables-openrc
+linux-firmware-brcm
+linux-firmware-other
+util-linux-misc

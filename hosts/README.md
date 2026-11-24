@@ -92,6 +92,28 @@ ansible-playbook bootstrap-cluster.yml          # 初回のみ: クラスタ全�
   コミットしてよい (公開鍵は秘密ではない)。秘密鍵は Mac 側だけ。
 - GitHub Secrets は image 生成に不要。使うのは Release 発行権限のみ。
 
+## 現行ホスト実測から取り込んだ改変 (2026-11-25、全7台調査)
+
+忘れていた「ちょっとした修正」の正体はこれだった。全台共通分は image の
+overlay と Ansible base ロールに取り込み済み。
+
+- `cgroups` サービスを default で有効化。cgroup は全台 cgroup2 統一
+  (v1 混在や rc.conf の追加設定は無し)
+- `/etc/local.d/rshared.start` で `mount --make-rshared /` (Longhorn の伝播)
+- `/etc/modules` = af_packet, ipv6, iscsi_tcp, dm_crypt
+- `iscsid` 有効化 + world に open-iscsi / nfs-utils (Longhorn の前提)
+- Pi の cmdline: `usb-storage.quirks=7825:a2a4:u` (USB-SATA の UAS 無効化) と
+  `cgroup_enable=cpuset cgroup_enable=memory cgroup_memory=1`
+  (ファームウェア既定の cgroup_disable=memory を後勝ちで打ち消す)
+- fstab の tmpfs 2件 (/tmp 256m、/var/log 64m)
+- 台固有: node1 のみ cloudflared 常駐と /var/lib/longhorn-hdd マウント
+  (後者は host_vars/node1.yml へ)
+
+実測との意図的な差分: smartmontools は node2/3/5/6 に無いドリフトだったので
+全台統一で入れる。sysctl 99-ssd.conf は x86 のみに実在したが全台統一のまま。
+/etc/hosts の `nodeN.my.domain` は setup-alpine の下書き残りと判断し、
+first-boot が正しい FQDN で書く形にした。
+
 ## 未確定 (要判断)
 
 1. agent の join 先: 現行は node1 の IP 固定。今回は DNS 名

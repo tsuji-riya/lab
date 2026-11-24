@@ -82,8 +82,10 @@ kernel=vmlinuz-rpi
 initramfs initramfs-rpi
 enable_uart=1
 EOF
-# USB SSD ブート前提 (SD の場合は root=/dev/mmcblk0p2 に変える)
-echo "modules=sd-mod,usb-storage,ext4 root=LABEL=root rootfstype=ext4 fsck.repair=yes console=tty1 console=serial0,115200" \
+# USB SSD ブート前提。実測 (全 Pi 同一) の cmdline を踏襲する:
+# usb-storage.quirks=7825:a2a4:u は使用中の USB-SATA アダプタの UAS 無効化、
+# cgroup_enable 群はファームウェア既定の cgroup_disable=memory を後勝ちで打ち消す
+echo "root=LABEL=root modules=sd-mod,usb-storage,ext4 quiet rootfstype=ext4 usb-storage.quirks=7825:a2a4:u cgroup_enable=cpuset cgroup_enable=memory cgroup_memory=1 console=tty1 console=serial0,115200" \
   | sudo tee mnt-boot/cmdline.txt >/dev/null
 
 cleanup; trap - EXIT

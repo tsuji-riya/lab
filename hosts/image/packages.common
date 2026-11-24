@@ -1,14 +1,28 @@
-# 全 arch 共通の world。ここに無いパッケージはホストに入らない。
+# 全 arch 共通の world。2026-11-25 の全台実測 (apk world) を正とし、
+# ドリフト (smartmontools の有無) は「全台に入れる」で統一した。
+# ここに無いパッケージはホストに入らない。
 alpine-base
+bash
+blkid
+busybox-mdev-openrc
+coreutils
+curl
+dosfstools
+e2fsprogs
+findutils
+iptables
+mount
+nfs-utils
+open-iscsi
 openssh
+openssl
+smartmontools
+util-linux
+wireless-regdb
+# 以下は現行に無い新規分 (硬化と管理用)
 sudo
 nftables
-ntp
-e2fsprogs
-util-linux
-parted
-curl
-jq
-smartmontools
 ca-certificates
 tzdata
+jq
+parted

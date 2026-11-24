@@ -1,0 +1,3 @@
+#!/bin/sh
+# Longhorn のマウント伝播に必須 (全台実測で同一設定だった)
+mount --make-rshared /
