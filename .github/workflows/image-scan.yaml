@@ -1,8 +1,12 @@
 name: image-scan
 
 # このリポジトリで動くコンテナイメージの脆弱性を Trivy で定期スキャンし、
-# 結果を Security タブ (code scanning) に上げる。マニフェスト変更時の PR でも回す
+# 結果を Security タブ (code scanning) に上げる。マニフェスト変更時の PR でも回すが、
+# SARIF のアップロードは main への push と週次実行だけにする (下の upload ステップ参照)
 on:
+  push:
+    branches: [main]
+    paths: [apps/**, infrastructure/**, fluxcd/**, .github/workflows/image-scan.yaml]
   pull_request:
     paths: [apps/**, infrastructure/**, fluxcd/**, .github/workflows/image-scan.yaml]
   schedule:
@@ -55,7 +59,12 @@ jobs:
           # 検出してもジョブは落とさず、Security タブのアラートで追う
           exit-code: "0"
 
+      # PR で SARIF を上げると github-advanced-security[bot] が
+      # 「Code Scanning が設定されました」という定型コメントを PR ごとに付けるので、
+      # アップロードは main 向けの実行 (push / schedule / 手動) だけにする。
+      # PR 上でもスキャン自体は回り、結果はジョブのログで確認できる
       - uses: github/codeql-action/upload-sarif@v4
+        if: github.event_name != 'pull_request'
         with:
           sarif_file: trivy-results.sarif
           category: trivy-${{ matrix.image }}
