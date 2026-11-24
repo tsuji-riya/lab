@@ -60,8 +60,15 @@ chmod 440 /etc/sudoers.d/riya 2>/dev/null || true
 
 # overlay は cp -a で焼かれるため、コピー元 (CI の checkout) の uid が
 # そのまま残る。/etc/sudoers.d が uid 1001 所有だと sudo が読み込みを
-# 拒否する (node7 実機で発覚)。/etc と /usr は全面 root 所有が正常形
-chown -R 0:0 /etc /usr
+# 拒否する (node7 実機で発覚)。ただし全面 chown -R はパッケージ側の
+# setuid ビットまで消してしまう (sudo 本体で実証済み) ので、
+# 「root 所有でないファイルだけ」を狙って直す
+find /etc /usr/local -not -user root -exec chown 0:0 {} + 2>/dev/null || true
+# 保険: sudo 本体の所有者と setuid を明示的に正常形へ
+if [ -f /usr/bin/sudo ]; then
+  chown 0:0 /usr/bin/sudo
+  chmod 4755 /usr/bin/sudo
+fi
 
 # sshd は鍵のみ (drop-in が本体)
 passwd -l root || true

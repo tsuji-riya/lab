@@ -5,6 +5,10 @@ set -eu
 MARKER=/etc/lab-firstboot-done
 [ -f "$MARKER" ] && exit 0
 
+# 失敗箇所を後から追えるよう、実行ログを残す (set -x つき)
+exec > /var/log/node-firstboot.log 2>&1
+set -x
+
 CONF=""
 for p in /boot/node.conf /boot/efi/node.conf /media/*/node.conf; do
   [ -f "$p" ] && CONF="$p" && break
@@ -40,7 +44,7 @@ EOF
 echo "${NODE_IP} ${NODE_HOSTNAME}" >> /etc/hosts
 
 # root パーティションをディスク末尾まで拡張 (image は 4G で作るため)
-ROOT_DEV=$(findmnt -no SOURCE /)
+ROOT_DEV=$(findmnt -no SOURCE / || true)
 DISK=$(lsblk -no PKNAME "$ROOT_DEV" || true)
 PARTNO=$(echo "$ROOT_DEV" | grep -o '[0-9]*$')
 if [ -n "$DISK" ] && [ -n "$PARTNO" ]; then

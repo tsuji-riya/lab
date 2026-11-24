@@ -72,7 +72,7 @@ sudo .cache/apk.static \
   --root "$PWD/mnt-root" --initdb add --no-cache "$@"
 
 # 共通 overlay を重ね、chroot で仕上げ (鍵・サービス有効化・manifest)
-sudo cp -a image/overlay/. mnt-root/
+sudo cp -a --no-preserve=ownership image/overlay/. mnt-root/
 for d in dev proc sys; do sudo mount --bind "/$d" "mnt-root/$d"; done
 sudo cp /etc/resolv.conf mnt-root/etc/resolv.conf
 sudo cp image/configure-chroot.sh mnt-root/tmp/configure-chroot.sh
