@@ -53,22 +53,20 @@ Actions の **Host ops** を手動実行する。入力は operation
 
 ### Cloudflare Tunnel の初期設定 (1回だけ)
 
-ホスト側は image 同梱の cloudflared が、ノード別のトンネルを張って
-SSH を公開ホスト名に紐付ける。到達は Access のポリシーで制御する。
+トンネル・DNS・Access アプリとポリシー・サービストークンは
+**Terraform で管理**する (`terraform/cloudflare/host_ssh.tf`)。
+PR をマージすれば既存の deploy ワークフローが plan/apply する。
+Zero Trust の画面で手作業する項目はない。
 
-1. Zero Trust → Networks → Tunnels で、ノードごとにトンネルを作成
-   する (名前は node1 〜 node7)。発行されるトークンを Mac に
-   `~/.config/lab-hosts-cf/nodeN.token` として保存する。flash.sh が
-   node.conf 経由で初回起動時に渡し、ホストの cf-tunnel サービスが使う
-2. 各トンネルの Public Hostname に `ssh-nodeN.riya.work` →
-   `ssh://localhost:22` を割り当てる
-3. Access アプリケーションで ssh-node*.riya.work を保護し、
-   サービストークンを許可するポリシーを付ける。GitHub Actions は
-   repo シークレット `CF_ACCESS_CLIENT_ID` /
-   `CF_ACCESS_CLIENT_SECRET` (既存) を cloudflared access の
-   ProxyCommand 経由で使う。対人では GitHub ログインでの
-   ブラウザ SSH も同じ入口で許可できる
-4. Environment `host-ops` のシークレットに `LAB_ADMIN_SSH_KEY`
+残る手作業は、生成された値の受け渡しだけ:
+
+1. Mac から `sh hosts/flash/fetch-tokens.sh --gh-secrets` を1回実行
+   する (terraform state へのアクセス認証が前提)。これで
+   - ノード別トンネルトークンが `~/.config/lab-hosts-cf/nodeN.token`
+     に落ちる (flash.sh が焼き込み時に node.conf 経由で渡す)
+   - サービストークンが GitHub シークレット `CF_ACCESS_CLIENT_ID` /
+     `CF_ACCESS_CLIENT_SECRET` に登録される
+2. Environment `host-ops` のシークレットに `LAB_ADMIN_SSH_KEY`
    (Mac の ~/.ssh/lab_admin の中身) と `KUBECONFIG_B64`
    (`base64 -i ~/.kube/config` の出力) を登録する
 
