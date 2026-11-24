@@ -21,7 +21,7 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        # 前段で Anubis のチェッカーを出し、通ったリクエストだけ nginx に渡す
+        # 前段で Anubis のチェッカーを出し、通ったリクエストだけサイト本体に渡す
         - name: anubis
           image: ghcr.io/techarohq/anubis:v1.28.2@sha256:5fcbce70ee6168be5b226d19bec90111d0acd0daf13028fa06b044cf3ebbbd5f
           ports:
@@ -61,17 +61,17 @@ spec:
             - name: bot-policy
               mountPath: /data/cfg
               readOnly: true
-        - name: nginx
-          # サイト本体は tsuji-riya/anubis.riya.work でビルドしたイメージ (nginx + 静的ファイル)
-          image: ghcr.io/tsuji-riya/anubis.riya.work:1.0.1@sha256:296389e1867d3d600063ebd572070c2a7812fc2ddbb1e5e596dce0ef57729d21
+        - name: server
+          # サイト本体は tsuji-riya/anubis.riya.work でビルドしたイメージ (自作サーバー + 静的ファイル、scratch)
+          image: ghcr.io/tsuji-riya/anubis.riya.work:1.0.4@sha256:c25f340883ea37dcb531d7a813a6ccbd0a6310caa471bdd56eec830a79633368
           ports:
-            - name: nginx
+            - name: web
               containerPort: 8080
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
-            runAsUser: 101
-            runAsGroup: 101
+            runAsUser: 65534
+            runAsGroup: 65534
             capabilities:
               drop: [ALL]
           resources:
@@ -83,14 +83,8 @@ spec:
           readinessProbe:
             httpGet:
               path: /
-              port: nginx
-          volumeMounts:
-            # nginx のキャッシュと pid 置き場
-            - name: tmp
-              mountPath: /tmp
+              port: web
       volumes:
         - name: bot-policy
           configMap:
             name: bot-policy
-        - name: tmp
-          emptyDir: {}
