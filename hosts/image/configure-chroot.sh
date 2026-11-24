@@ -14,9 +14,11 @@ chown -R riya:riya /home/riya
 
 # サービス有効化 (実測: cgroups / iscsid / local は全台 default)
 # nftables と node-firstboot は新規分。k3s / k3s-agent は導入時に有効化される
-for svc in sshd nftables ntpd cgroups iscsid local cf-tunnel node-firstboot; do
+for svc in sshd nftables ntpd cgroups iscsid local cf-tunnel; do
   rc-update add "$svc" default || rc-update add "$svc" boot
 done
+# identity 適用は networking より先 (boot ランレベル)
+rc-update add node-firstboot boot
 rc-update add networking boot || true
 
 # cloudflared は Alpine のパッケージに無いため、公式の静的バイナリを
