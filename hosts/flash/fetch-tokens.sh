@@ -1,13 +1,22 @@
 #!/bin/sh
 # Terraform が作ったホスト用トンネルトークンを Mac に取り込む。
-# 前提: terraform/ の state にアクセスできること (backend の認証情報と
-# CLOUDFLARE_API_TOKEN が環境にあること)。
+# 前提: deploy ワークフローと同じ認証情報が環境にあること。
+#   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY  (R2 = state の置き場)
+#   R2_BUCKET / R2_ENDPOINT                    (backend の init 用)
 #
 # 使い方:
 #   sh hosts/flash/fetch-tokens.sh              # トークンを ~/.config/lab-hosts-cf/ に書く
 #   sh hosts/flash/fetch-tokens.sh --gh-secrets # ついでに Actions 用シークレットも更新
 set -eu
 cd "$(dirname "$0")/../.."
+
+# 初回は deploy ワークフローと同じ形で init する
+if [ ! -d terraform/.terraform ]; then
+  : "${R2_BUCKET:?R2_BUCKET が必要です}" "${R2_ENDPOINT:?R2_ENDPOINT が必要です}"
+  terraform -chdir=terraform init \
+    -backend-config="bucket=${R2_BUCKET}" \
+    -backend-config="endpoints={s3=\"${R2_ENDPOINT}\"}"
+fi
 
 OUT_DIR="${CF_TOKEN_DIR:-$HOME/.config/lab-hosts-cf}"
 export OUT_DIR
