@@ -48,6 +48,9 @@ chmod 755 /usr/bin/cloudflared
 mkdir -p /etc/lab
 apk info -v > /etc/lab/packages.manifest
 
+# sudoers.d のパーミッションを正す (緩いと sudo が読み飛ばす)
+chmod 440 /etc/sudoers.d/riya 2>/dev/null || true
+
 # sshd は鍵のみ (drop-in が本体)
 passwd -l root || true
 
