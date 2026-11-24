@@ -68,7 +68,7 @@ resource "cloudflare_zero_trust_access_policy" "host_ops_service_token" {
 
   include = [
     {
-      access_service_token = {
+      service_token = {
         token_id = cloudflare_zero_trust_access_service_token.host_ops.id
       }
     },
