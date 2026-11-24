@@ -44,7 +44,7 @@ ROOT_DEV=$(findmnt -no SOURCE /)
 DISK=$(lsblk -no PKNAME "$ROOT_DEV" || true)
 PARTNO=$(echo "$ROOT_DEV" | grep -o '[0-9]*$')
 if [ -n "$DISK" ] && [ -n "$PARTNO" ]; then
-  parted -s "/dev/$DISK" ---pretend-input-tty resizepart "$PARTNO" 100% || true
+  parted -s "/dev/$DISK" resizepart "$PARTNO" 100% || true
   resize2fs "$ROOT_DEV" || true
 fi
 
