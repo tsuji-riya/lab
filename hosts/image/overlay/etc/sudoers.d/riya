@@ -1,0 +1,3 @@
+# 管理ユーザー riya は SSH 鍵でのみログインする設計で、パスワードを持たない。
+# sudo にパスワードを要求させると詰むため、鍵認証を資格として NOPASSWD にする
+riya ALL=(ALL) NOPASSWD: ALL
