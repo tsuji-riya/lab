@@ -25,11 +25,14 @@ rc-update add node-firstboot boot
 # これが無いと localmount 不在で /boot がマウントされず node.conf が
 # 読めない、hwdrivers/mdev 不在で USB キーボードや NIC のドライバが
 # ロードされない、root 不在で / が rw 再マウントされない (node7 実機で発覚)
+# 存在するサービスだけを有効化する (名前は openrc の版で変わる:
+# urandom は seedrng に改名された。無い名前を rc-update すると
+# set -e でビルドごと落ちるので、実在チェックを挟む)
 for svc in devfs dmesg mdev; do
-  rc-update add "$svc" sysinit
+  [ -e "/etc/init.d/$svc" ] && rc-update add "$svc" sysinit
 done
-for svc in root localmount hostname sysctl modules hwdrivers bootmisc urandom swap syslog; do
-  rc-update add "$svc" boot
+for svc in root localmount hostname sysctl modules hwdrivers bootmisc seedrng swap syslog; do
+  [ -e "/etc/init.d/$svc" ] && rc-update add "$svc" boot
 done
 rc-update add networking boot || true
 
