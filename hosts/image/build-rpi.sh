@@ -74,10 +74,15 @@ sudo .cache/apk.static \
 # 共通 overlay を重ね、chroot で仕上げ (鍵・サービス有効化・manifest)
 sudo cp -a --no-preserve=ownership image/overlay/. mnt-root/
 for d in dev proc sys; do sudo mount --bind "/$d" "mnt-root/$d"; done
+# chroot 内のダウンロード用にランナーの resolv.conf を一時的に使う
 sudo cp /etc/resolv.conf mnt-root/etc/resolv.conf
 sudo cp image/configure-chroot.sh mnt-root/tmp/configure-chroot.sh
 sudo chroot mnt-root /bin/sh /tmp/configure-chroot.sh
 for d in dev proc sys; do sudo umount "mnt-root/$d"; done
+
+# ランナーの resolv.conf (Azure の stub resolver) を image に残すと
+# ノードの DNS が死ぬ。lab の DNS に差し替える (firstboot も毎回書く)
+echo "nameserver 192.168.1.1" | sudo tee mnt-root/etc/resolv.conf >/dev/null
 
 # fstab: boot は FAT、root は ext4 (USB SSD 前提でデバイス名は UUID でなく LABEL)
 sudo mkdir -p mnt-root/boot

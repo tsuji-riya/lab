@@ -41,15 +41,33 @@ iface eth0 inet static
   netmask 255.255.255.0
   gateway ${NODE_GATEWAY:-192.168.1.1}
 EOF
-echo "${NODE_IP} ${NODE_HOSTNAME}" >> /etc/hosts
+grep -q "${NODE_HOSTNAME}" /etc/hosts || echo "${NODE_IP} ${NODE_HOSTNAME}" >> /etc/hosts
+
+# DNS はゲートウェイ (ルーター) を指す。書かないと名前解決が全滅する
+printf 'nameserver %s\n' "${NODE_GATEWAY:-192.168.1.1}" > /etc/resolv.conf
 
 # root パーティションをディスク末尾まで拡張 (image は 4G で作るため)
 ROOT_DEV=$(findmnt -no SOURCE / || true)
 DISK=$(lsblk -no PKNAME "$ROOT_DEV" || true)
 PARTNO=$(echo "$ROOT_DEV" | grep -o '[0-9]*$')
-if [ -n "$DISK" ] && [ -n "$PARTNO" ]; then
-  parted -s "/dev/$DISK" resizepart "$PARTNO" 100% || true
+if [ -n "$DISK" ] && [ -n "$PARTNO" ] && [ -n "$ROOT_DEV" ]; then
+  DISK_BYTES=$(lsblk -bno SIZE "/dev/$DISK" || true)
+  PART_BYTES=$(lsblk -bno SIZE "$ROOT_DEV" || true)
+  # パーティションがディスクより 16MiB 以上小さければテーブルを伸ばす。
+  # parted の resizepart はマウント中 root で反映されなかった (実機) ため
+  # sfdisk でテーブルを書き、partx -u (BLKPG) でカーネルへ伝える
+  if [ -n "$DISK_BYTES" ] && [ -n "$PART_BYTES" ] && [ "$PART_BYTES" -lt $((DISK_BYTES - 16777216)) ]; then
+    printf ', +\n' | sfdisk -N "$PARTNO" "/dev/$DISK" || true
+    partx -u "/dev/$DISK" || true
+  fi
   resize2fs "$ROOT_DEV" || true
+  # それでも FS が小さいままならマーカーを書かず、次回起動で再試行する
+  FS_BYTES=$(df -B1 / | awk 'NR==2 {print $2}')
+  PART_BYTES=$(lsblk -bno SIZE "$ROOT_DEV" || true)
+  if [ -n "$FS_BYTES" ] && [ -n "$PART_BYTES" ] && [ "$FS_BYTES" -lt $((PART_BYTES - 16777216)) ]; then
+    echo "root fs not grown yet (fs=$FS_BYTES part=$PART_BYTES), retry on next boot"
+    exit 0
+  fi
 fi
 
 # Cloudflare Tunnel (GitHub Actions からの SSH 到達用)。トークンは
