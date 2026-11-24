@@ -14,5 +14,8 @@ start() {
   ebegin "node firstboot"
   /usr/local/sbin/node-firstboot
   eend $?
-  rc-update del node-firstboot boot 2>/dev/null || true
+  # 成功したときだけ runlevel から外す。失敗時は次回起動で再試行する
+  if [ -f /etc/lab-firstboot-done ]; then
+    rc-update del node-firstboot boot 2>/dev/null || true
+  fi
 }

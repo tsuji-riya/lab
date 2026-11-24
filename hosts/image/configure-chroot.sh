@@ -19,6 +19,18 @@ for svc in sshd nftables ntpd cgroups iscsid local cf-tunnel; do
 done
 # identity 適用は networking より先 (boot ランレベル)
 rc-update add node-firstboot boot
+
+# 標準サービスの runlevel は openrc パッケージには含まれず、通常は
+# setup-alpine が入れる。自前で rootfs を組む場合は明示的に有効化する。
+# これが無いと localmount 不在で /boot がマウントされず node.conf が
+# 読めない、hwdrivers/mdev 不在で USB キーボードや NIC のドライバが
+# ロードされない、root 不在で / が rw 再マウントされない (node7 実機で発覚)
+for svc in devfs dmesg mdev; do
+  rc-update add "$svc" sysinit
+done
+for svc in root localmount hostname sysctl modules hwdrivers bootmisc urandom swap syslog; do
+  rc-update add "$svc" boot
+done
 rc-update add networking boot || true
 
 # cloudflared は Alpine のパッケージに無いため、公式の静的バイナリを
