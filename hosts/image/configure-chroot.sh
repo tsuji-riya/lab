@@ -6,6 +6,10 @@ set -eu
 # 管理ユーザー (鍵は overlay で配置済み)
 id riya >/dev/null 2>&1 || adduser -D -s /bin/sh riya
 addgroup riya wheel || true
+# adduser -D は shadow を "!" (ロック) にするが、OpenSSH はロックされた
+# アカウントを公開鍵でも拒否する。"*" にするとパスワードログイン不可の
+# まま、アカウントロックだけ外れる (鍵ログインが通る)
+sed -i 's/^riya:!/riya:*:/' /etc/shadow
 # authorized_keys は image に入れない (node.conf 経由で初回起動時に注入)。
 # ここでは .ssh ディレクトリだけ用意する
 mkdir -p /home/riya/.ssh
