@@ -106,8 +106,9 @@ overlay と Ansible base ロールに取り込み済み。
   `cgroup_enable=cpuset cgroup_enable=memory cgroup_memory=1`
   (ファームウェア既定の cgroup_disable=memory を後勝ちで打ち消す)
 - fstab の tmpfs 2件 (/tmp 256m、/var/log 64m)
-- 台固有: node1 のみ cloudflared 常駐と /var/lib/longhorn-hdd マウント
-  (後者は host_vars/node1.yml へ)
+- 台固有: node1 のみ cloudflared 常駐。実測で見えた /var/lib/longhorn-hdd
+  マウントは、対象 HDD が既に撤去済みのため取り込まなかった
+  (2026-11-25 本人申告。台固有マウントの仕組みだけ base ロールに残してある)
 
 実測との意図的な差分: smartmontools は node2/3/5/6 に無いドリフトだったので
 全台統一で入れる。sysctl 99-ssd.conf は x86 のみに実在したが全台統一のまま。
