@@ -22,4 +22,9 @@ apk info -v > /etc/lab/packages.manifest
 
 # sshd は鍵のみ (drop-in が本体)
 passwd -l root || true
+
+# SSH ホスト鍵は image に焼かない。apk の post-install が chroot 内で
+# 生成してしまうため、ここで必ず消す。初回起動時に node-firstboot が
+# 台ごとに生成する (全台同一のホスト鍵 + 公開 image は impersonation の温床)
+rm -f /etc/ssh/ssh_host_*
 echo "chroot configure done"

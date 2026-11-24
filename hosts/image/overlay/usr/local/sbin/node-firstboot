@@ -14,6 +14,9 @@ done
 # NODE_HOSTNAME= / NODE_IP= / NODE_GATEWAY= / NODE_ROLE=
 . "$CONF"
 
+# SSH ホスト鍵をこの台専用に生成 (image には焼いていない)
+[ -f /etc/ssh/ssh_host_ed25519_key ] || ssh-keygen -A
+
 hostname "$NODE_HOSTNAME"
 echo "$NODE_HOSTNAME" > /etc/hostname
 cat > /etc/network/interfaces <<EOF
