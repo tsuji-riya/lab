@@ -1,0 +1,21 @@
+---
+# k3s_mode: server_init | server_join | agent (未指定なら収束のみ)
+- name: Build k3s install arguments
+  set_fact:
+    k3s_args: >-
+      {{ 'server --cluster-init'
+         if k3s_mode == 'server_init'
+         else 'server --server https://' + k3s_api_host + ':'
+              + (k3s_api_port | string) + ' --token ' + k3s_token
+         if k3s_mode == 'server_join'
+         else 'agent --server https://' + k3s_api_host + ':'
+              + (k3s_api_port | string) + ' --token ' + k3s_token }}
+  when: k3s_mode is defined
+
+- name: Install k3s
+  shell: >
+    curl -sfL https://get.k3s.io |
+    INSTALL_K3S_VERSION={{ k3s_version }} sh -s - {{ k3s_args }}
+  args:
+    creates: /usr/local/bin/k3s
+  when: k3s_mode is defined

@@ -1,0 +1,33 @@
+---
+# 初回構築専用。順序が意味を持つので逐次実行する:
+# node1 (cluster-init) → node2/node3 (server join) → node4-7 (agent join)
+- hosts: node1
+  roles:
+    - role: k3s_node
+      k3s_mode: server_init
+
+- hosts: node1
+  tasks:
+    - name: Fetch k3s token from node1
+      slurp:
+        src: /var/lib/rancher/k3s/server/node-token
+      register: token_file
+    - name: Stash token in memory only
+      set_fact:
+        k3s_token: "{{ token_file.content | b64decode | trim }}"
+      delegate_to: localhost
+      run_once: true
+
+- hosts: node2,node3
+  vars:
+    k3s_token: "{{ hostvars['node1'].k3s_token }}"
+  roles:
+    - role: k3s_node
+      k3s_mode: server_join
+
+- hosts: agents
+  vars:
+    k3s_token: "{{ hostvars['node1'].k3s_token }}"
+  roles:
+    - role: k3s_node
+      k3s_mode: agent

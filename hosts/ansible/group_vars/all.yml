@@ -1,0 +1,9 @@
+---
+timezone: Asia/Tokyo
+admin_user: riya
+k3s_version: "v1.37.2+k3s1"
+# join 先は DNS 名に寄せる (要判断 1)。3台の CP を返す A レコードを用意すること。
+k3s_api_host: "api.k3s.riya.work"
+k3s_api_port: 6443
+lan_cidr: "192.168.1.0/24"
+# k3s_token はここに書かない。bootstrap 時に node1 から取得し実行中のみ保持する。

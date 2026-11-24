@@ -1,0 +1,52 @@
+#!/bin/sh
+# 初回起動時のみ: 焼き込み時に注入された node.conf から identity を適用する。
+# node.conf の探索先: Pi の /boot、x86 の EFI パーティション (/boot/efi)。
+set -eu
+MARKER=/etc/lab-firstboot-done
+[ -f "$MARKER" ] && exit 0
+
+CONF=""
+for p in /boot/node.conf /boot/efi/node.conf /media/*/node.conf; do
+  [ -f "$p" ] && CONF="$p" && break
+done
+[ -n "$CONF" ] || { echo "node.conf not found, skipping"; exit 0; }
+
+# NODE_HOSTNAME= / NODE_IP= / NODE_GATEWAY= / NODE_ROLE=
+. "$CONF"
+
+# SSH ホスト鍵をこの台専用に生成 (image には焼いていない)
+[ -f /etc/ssh/ssh_host_ed25519_key ] || ssh-keygen -A
+
+# 管理用公開鍵は node.conf 経由で受け取る (Git にも image にも入れない)
+if [ -n "${SSH_PUBKEY:-}" ]; then
+  mkdir -p /home/riya/.ssh
+  echo "$SSH_PUBKEY" > /home/riya/.ssh/authorized_keys
+  chmod 700 /home/riya/.ssh
+  chmod 600 /home/riya/.ssh/authorized_keys
+  chown -R riya:riya /home/riya
+fi
+
+hostname "$NODE_HOSTNAME"
+echo "$NODE_HOSTNAME" > /etc/hostname
+cat > /etc/network/interfaces <<EOF
+auto lo
+iface lo inet loopback
+auto eth0
+iface eth0 inet static
+  address ${NODE_IP}
+  netmask 255.255.255.0
+  gateway ${NODE_GATEWAY:-192.168.1.1}
+EOF
+echo "${NODE_IP} ${NODE_HOSTNAME}" >> /etc/hosts
+
+# root パーティションをディスク末尾まで拡張 (image は 4G で作るため)
+ROOT_DEV=$(findmnt -no SOURCE /)
+DISK=$(lsblk -no PKNAME "$ROOT_DEV" || true)
+PARTNO=$(echo "$ROOT_DEV" | grep -o '[0-9]*$')
+if [ -n "$DISK" ] && [ -n "$PARTNO" ]; then
+  parted -s "/dev/$DISK" ---pretend-input-tty resizepart "$PARTNO" 100% || true
+  resize2fs "$ROOT_DEV" || true
+fi
+
+date -u +%FT%TZ > "$MARKER"
+echo "firstboot done: $NODE_HOSTNAME $NODE_IP"
