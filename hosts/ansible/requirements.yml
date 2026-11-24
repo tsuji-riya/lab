@@ -1,0 +1,5 @@
+---
+collections:
+  # mount モジュールは ansible-core から ansible.posix に移った
+  - name: ansible.posix
+    version: ">=1.5"

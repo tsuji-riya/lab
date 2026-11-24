@@ -67,6 +67,7 @@ jobs:
       - name: Install Ansible and kubectl
         run: |
           pip install --quiet ansible-core
+          ansible-galaxy collection install -r hosts/ansible/requirements.yml
           curl -fsSLO "https://dl.k8s.io/release/$(curl -fsSL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
           sudo install -m 755 kubectl /usr/local/bin/kubectl
       - name: Run ops playbook
