@@ -23,7 +23,7 @@ sudo apt-get update -qq && sudo apt-get install -y -qq zstd dosfstools e2fsprogs
 
 # apk-tools-static (aarch64) を版で固定して取得
 APK_STATIC_VER=$(curl -fsSL "$MIRROR/main/aarch64/APKINDEX.tar.gz" | tar -xzO APKINDEX 2>/dev/null \
-  | awk '/^P:apk-tools-static$/{f=1} f&&/^V:/{print $2; exit}')
+  | awk '/^P:apk-tools-static$/{f=1} f&&/^V:/{print substr($0, 3); exit}')
 [ -n "$APK_STATIC_VER" ] || { echo "apk-tools-static の版が引けない" >&2; exit 1; }
 if [ ! -x .cache/apk.static ]; then
   curl -fsSL "$MIRROR/main/aarch64/apk-tools-static-${APK_STATIC_VER}.apk" -o .cache/apk-tools-static.apk
