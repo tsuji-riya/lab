@@ -89,6 +89,6 @@ echo "root=LABEL=root modules=sd-mod,usb-storage,ext4 quiet rootfstype=ext4 usb-
   | sudo tee mnt-boot/cmdline.txt >/dev/null
 
 cleanup; trap - EXIT
-( cd out && sha256sum "$(basename "$IMG")" > "$(basename "$IMG").sha256" )
 zstd -19 -T0 "$IMG" -o "$IMG.zst" && rm "$IMG"
-echo "OK: $IMG.zst"
+./image/encrypt-image.sh "$IMG.zst"
+echo "OK: $IMG.zst.age"

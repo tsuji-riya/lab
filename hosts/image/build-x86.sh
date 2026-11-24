@@ -36,8 +36,8 @@ docker run --rm --privileged -v "$PWD:/work" -w /work alpine:3.24 sh -eu -c "
     --script-chroot ${OUT} -- image/configure-chroot.sh
 "
 
-# manifest と圧縮
-( cd out && sha256sum "$(basename "$OUT")" > "$(basename "$OUT").sha256" )
+# 圧縮して age 暗号化し、平文は残さない。sha256 は暗号化後の配布物に対して作る
 zstd -19 -T0 "$OUT" -o "$OUT.zst" && rm "$OUT"
+./image/encrypt-image.sh "$OUT.zst"
 ls -lh out/
-echo "OK: $OUT.zst"
+echo "OK: $OUT.zst.age"

@@ -47,7 +47,8 @@ image の Release 承認 = 「この定義で焼いてよい」、flash の実�
   raspberrypi-bootloader + linux-rpi を配置する自前アセンブリ。world と
   overlay は x86 と完全共通にしてドリフトを作らない。初回は node7 実機での
   起動確認までを「未検証の前提」とし、詰まったら runbook 側に記録する。
-- 両 arch とも成果物は `.img.zst` + `.sha256` を Release に添付し、
+- 両 arch とも成果物は age 暗号化した `.img.zst.age` + その `.sha256` を
+  Release に添付し (平文は CI 上でも Release にも残さない)、
   `actions/attest-build-provenance` で来歴を付ける。パッケージの版一覧は
   image 内 `/etc/lab/packages.manifest` に残る (SBOM 代替)。
 
@@ -55,12 +56,11 @@ image の Release 承認 = 「この定義で焼いてよい」、flash の実�
 
 ```sh
 # 1. image を作る: Actions の Build images を手動実行 or v* タグ
-# 2. Release から image と sha256 を取得し検証
-zstd -d alpine-3.24.4-x86_64.img.zst
-sha256sum -c alpine-3.24.4-x86_64.img.sha256
+# 2. Release から暗号化 image と sha256 を取得し検証
+sha256sum -c alpine-3.24.4-x86_64.img.zst.age.sha256
 
-# 3. 焼く (対象ディスクを間違えると死ぬので flash.sh は確認を挟む)
-./hosts/flash/flash.sh --node node7 --image alpine-3.24.4-aarch64.img --device /dev/disk6
+# 3. 焼く (復号は flash.sh がパイプでやる。平文はディスクに残らない)
+./hosts/flash/flash.sh --node node7 --image alpine-3.24.4-aarch64.img.zst.age --device /dev/disk6
 
 # 4. 起動して疎通確認後、Ansible で構築
 cd hosts/ansible
@@ -91,6 +91,11 @@ ansible-playbook bootstrap-cluster.yml          # 初回のみ: クラスタ全�
 - SSH は公開鍵のみ。公開鍵は `image/overlay/home/riya/.ssh/authorized_keys` に
   コミットしてよい (公開鍵は秘密ではない)。秘密鍵は Mac 側だけ。
 - GitHub Secrets は image 生成に不要。使うのは Release 発行権限のみ。
+- image の暗号化は age。公開鍵は `image/age-recipient.txt` にコミットし、
+  秘密鍵は Mac の `~/.config/lab-hosts-age.txt` にだけ置く。生成は一度だけ:
+  `age-keygen -o ~/.config/lab-hosts-age.txt` (Mac に age が無ければ
+  `brew install age`)。秘密鍵を失うと過去の Release image は全部復号不能になる
+  ので、パスワードマネージャ等にバックアップすること。
 
 ## 現行ホスト実測から取り込んだ改変 (2026-11-25、全7台調査)
 

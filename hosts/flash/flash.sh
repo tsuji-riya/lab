@@ -25,8 +25,17 @@ sleep 5
 printf '本当に書き込みますか? [yes/NO] '
 read -r ans; [ "$ans" = "yes" ] || { echo "中止"; exit 1; }
 
-case "$IMG" in *.zst) zstd -dc "$IMG" | sudo dd of="$DEV" bs=4m status=progress;; 
-  *) sudo dd if="$IMG" of="$DEV" bs=4m status=progress;; esac
+AGE_KEY="${AGE_KEY:-$HOME/.config/lab-hosts-age.txt}"
+case "$IMG" in
+  *.img.zst.age)
+    command -v age >/dev/null 2>&1 || { echo "age が必要です: brew install age" >&2; exit 1; }
+    [ -f "$AGE_KEY" ] || { echo "age 秘密鍵が無い: $AGE_KEY" >&2; exit 1; }
+    age -d -i "$AGE_KEY" "$IMG" | zstd -dc | sudo dd of="$DEV" bs=4m status=progress;;
+  *.img.zst)
+    zstd -dc "$IMG" | sudo dd of="$DEV" bs=4m status=progress;;
+  *)
+    sudo dd if="$IMG" of="$DEV" bs=4m status=progress;;
+esac
 sync
 
 cat > /tmp/node.conf <<EOF

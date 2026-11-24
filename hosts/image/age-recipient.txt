@@ -1,0 +1,3 @@
+# age の公開鍵 (age-keygen で生成した age1... の行) をここに1行で入れる。
+# 秘密鍵は Mac の ~/.config/lab-hosts-age.txt にだけ置き、絶対にコミットしない。
+# AGE_PUBLIC_KEY_PLACEHOLDER
