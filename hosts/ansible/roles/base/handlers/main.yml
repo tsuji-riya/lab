@@ -1,0 +1,5 @@
+---
+- name: Reload sysctl
+  command: sysctl -p /etc/sysctl.d/99-lab.conf
+- name: Reload sshd
+  service: { name: sshd, state: reloaded }

@@ -1,0 +1,22 @@
+# image 生成物
+out/
+.cache/
+mnt-boot/
+mnt-root/
+*.img
+*.img.zst
+*.qcow2
+
+# 秘密・ローカル上書き (公開 repo では絶対に入れない)
+*.local.yml
+.env
+*node-token*
+*vault*.yml
+id_*
+*.pem
+*.key
+!image/overlay/home/riya/.ssh/authorized_keys
+
+# Ansible の残骸
+*.retry
+__pycache__/

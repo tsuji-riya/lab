@@ -1,0 +1,7 @@
+---
+# ホスト収束 (day-2)。何度流しても同じ結果になること。
+- hosts: all
+  roles:
+    - base
+    - firewall
+    - k3s_node

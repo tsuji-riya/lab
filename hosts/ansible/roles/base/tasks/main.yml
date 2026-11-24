@@ -1,0 +1,24 @@
+---
+- name: Timezone
+  copy: { src: /usr/share/zoneinfo/Asia/Tokyo, dest: /etc/localtime, remote_src: true }
+- name: ntpd enabled
+  service: { name: ntpd, enabled: true, state: started }
+- name: "sysctl (全台共通に統一: 要判断 2)"
+  copy:
+    dest: /etc/sysctl.d/99-lab.conf
+    content: |
+      vm.swappiness = 0
+      vm.dirty_writeback_centisecs = 1500
+      vm.dirty_expire_centisecs = 3000
+  notify: Reload sysctl
+- name: sshd is key-only
+  copy:
+    dest: /etc/ssh/sshd_config.d/10-lab.conf
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin prohibit-password
+      AllowUsers {{ admin_user }}
+  notify: Reload sshd
+- name: root password locked
+  user: { name: root, password_lock: true }

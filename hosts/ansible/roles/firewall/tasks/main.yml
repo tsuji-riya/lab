@@ -1,0 +1,28 @@
+---
+- name: nftables base (image と同じ内容を正本として再配布)
+  copy: { src: "{{ playbook_dir }}/../image/overlay/etc/nftables.nft", dest: /etc/nftables.nft }
+- name: k3s ports fragment (server)
+  copy:
+    dest: /etc/nftables.d/20-k3s.nft
+    content: |
+      table inet filter {
+        chain input {
+          ip saddr {{ lan_cidr }} tcp dport { 6443, 2379-2380, 10250 } accept
+          tcp dport { 8472, 10250 } accept
+          udp dport 8472 accept
+        }
+      }
+  when: inventory_hostname in groups['servers']
+- name: k3s ports fragment (agent)
+  copy:
+    dest: /etc/nftables.d/20-k3s.nft
+    content: |
+      table inet filter {
+        chain input {
+          tcp dport 10250 accept
+          udp dport 8472 accept
+        }
+      }
+  when: inventory_hostname in groups['agents']
+- name: nftables enabled and loaded
+  service: { name: nftables, enabled: true, state: restarted }

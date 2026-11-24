@@ -1,0 +1,14 @@
+# 全 arch 共通の world。ここに無いパッケージはホストに入らない。
+alpine-base
+openssh
+sudo
+nftables
+ntp
+e2fsprogs
+util-linux
+parted
+curl
+jq
+smartmontools
+ca-certificates
+tzdata

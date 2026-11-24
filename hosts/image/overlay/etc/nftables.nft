@@ -1,0 +1,15 @@
+table inet filter {
+  chain input {
+    type filter hook input priority 0; policy drop;
+    iif "lo" accept
+    ct state established,related accept
+    ip protocol icmp accept
+    ip6 nexthdr icmpv6 accept
+    # 管理は LAN からの SSH のみ。k3s 等の追加ポートは Ansible の role が
+    # /etc/nftables.d/ に断片を置いて解放する (ここを直接書き換えない)。
+    ip saddr 192.168.1.0/24 tcp dport 22 accept
+  }
+  chain forward { type filter hook forward priority 0; policy accept; }
+  chain output  { type filter hook output  priority 0; policy accept; }
+}
+include "/etc/nftables.d/*.nft"
