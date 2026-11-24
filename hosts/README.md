@@ -95,8 +95,10 @@ ansible-playbook bootstrap-cluster.yml          # 初回のみ: クラスタ全�
   初回起動で authorized_keys に配置する。秘密鍵は Mac 側だけ。
   鍵を差し替えても image の再ビルドは不要になる利点もある。
 - GitHub Secrets は image 生成に不要。使うのは Release 発行権限のみ。
-- image の暗号化は age。公開鍵は `image/age-recipient.txt` にコミットし、
-  秘密鍵は Mac の `~/.config/lab-hosts-age.txt` にだけ置く。生成は一度だけ:
+- image の暗号化は age。公開鍵は repo に置かず、Actions Secret の
+  `AGE_RECIPIENT` に登録する (Settings → Secrets and variables → Actions
+  からいつでも上書き可能、コミット不要)。秘密鍵は Mac の
+  `~/.config/lab-hosts-age.txt` にだけ置く。生成は一度だけ:
   `age-keygen -o ~/.config/lab-hosts-age.txt` (Mac に age が無ければ
   `brew install age`)。秘密鍵を失うと過去の Release image は全部復号不能になる
   ので、パスワードマネージャ等にバックアップすること。

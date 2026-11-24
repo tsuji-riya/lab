@@ -61,6 +61,9 @@ jobs:
       - name: Build x86_64 image
         env:
           ALPINE_VERSION: ${{ inputs.alpine_version || '3.24.4' }}
+          # age の宛先公開鍵は repo に置かず Actions Secret から渡す。
+          # 書き換えは Settings → Secrets and variables → Actions で即時
+          AGE_RECIPIENT: ${{ secrets.AGE_RECIPIENT }}
         run: ./image/build-x86.sh
       - name: Attest provenance
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
@@ -85,6 +88,7 @@ jobs:
       - name: Build Raspberry Pi image
         env:
           ALPINE_VERSION: ${{ inputs.alpine_version || '3.24.4' }}
+          AGE_RECIPIENT: ${{ secrets.AGE_RECIPIENT }}
         run: ./image/build-rpi.sh
       - name: Attest provenance
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
