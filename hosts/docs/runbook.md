@@ -31,3 +31,34 @@ Ansible の変更は Git の revert = 次回収束で戻る。
 鍵を失った場合のみ、モニタ直結で root コンソール (パスワードはロック済みなので
 シングルユーザーモード) から authorized_keys を差し替える。手順を使ったら
 この repo に issue を残すこと (監査の代替)。
+
+## GitHub からホスト OS を変更する (パッケージ更新 / 再起動)
+
+Actions の **Host ops** を手動実行する。入力は operation
+(package-update / reboot / update-and-reboot) と target
+(node7 単体 → agents → servers のリング順を想定)。
+
+- 実行は Mac 上の self-hosted runner (label `lab-lan`) が Ansible
+  `ops.yml` を叩く形。GitHub-hosted runner は LAN に届かないため
+- Environment `host-ops` の承認が実行ゲート。再起動は drain →
+  reboot → uncordon → Ready 確認まで playbook が面倒を見て、
+  `serial: 1` で必ず1台ずつ
+- 既存の system-upgrade-controller の週次 Plan (日曜 03:00) は定期
+  パッチ用に残し、こちらはオンデマンド用。同じ台に同時にかち合う
+  使い方はしない
+
+### self-hosted runner の初期設定 (Mac、1回だけ)
+
+1. repo の Settings → Actions → Runners → New self-hosted runner
+   (macOS) の手順で `~/actions-runner` に展開し、`./config.sh` で
+   label `lab-lan` を付けて登録
+2. `./svc.sh install && ./svc.sh start` で常駐化 (launchd)
+3. runner が使う SSH 鍵は Ansible と同じ `~/.ssh/lab_admin`。
+   kubeconfig は drain 用に `~/.kube/config` を置く
+4. Environment `host-ops` を作り、自分を required reviewer にする
+
+注意: **公開 repo + self-hosted runner の組み合わせは、fork PR の
+workflow を runner で実行させないことが絶対条件**。Host ops は
+workflow_dispatch 専用にしてあり、pull_request トリガーを足さない。
+GitHub 側でも Settings → Actions → "Fork pull request workflows"
+の承認必須を有効にしておく。
