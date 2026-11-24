@@ -25,16 +25,24 @@ sleep 5
 printf '本当に書き込みますか? [yes/NO] '
 read -r ans; [ "$ans" = "yes" ] || { echo "中止"; exit 1; }
 
+# macOS は挿したディスクを自動マウントするため、先に unmountDisk しないと
+# dd が Resource busy で落ちる。書き込みは raw デバイス (/dev/rdiskN) が速い
+WRITE_DEV="$DEV"
+if [ "$(uname)" = "Darwin" ]; then
+  diskutil unmountDisk "$DEV" || true
+  WRITE_DEV="/dev/r$(basename "$DEV")"
+fi
+
 AGE_KEY="${AGE_KEY:-$HOME/.config/lab-hosts-age.txt}"
 case "$IMG" in
   *.img.zst.age)
     command -v age >/dev/null 2>&1 || { echo "age が必要です: brew install age" >&2; exit 1; }
     [ -f "$AGE_KEY" ] || { echo "age 秘密鍵が無い: $AGE_KEY" >&2; exit 1; }
-    age -d -i "$AGE_KEY" "$IMG" | zstd -dc | sudo dd of="$DEV" bs=4m status=progress;;
+    age -d -i "$AGE_KEY" "$IMG" | zstd -dc | sudo dd of="$WRITE_DEV" bs=4m status=progress;;
   *.img.zst)
-    zstd -dc "$IMG" | sudo dd of="$DEV" bs=4m status=progress;;
+    zstd -dc "$IMG" | sudo dd of="$WRITE_DEV" bs=4m status=progress;;
   *)
-    sudo dd if="$IMG" of="$DEV" bs=4m status=progress;;
+    sudo dd if="$IMG" of="$WRITE_DEV" bs=4m status=progress;;
 esac
 sync
 
@@ -57,6 +65,20 @@ NODE_ROLE=${ROLE}
 SSH_PUBKEY='${PUBKEY}'
 ${CF_LINE}
 EOF
-echo "node.conf を boot パーティションへ手動コピーしてください (FAT なので Finder/エクスプローラ可):"
-echo "  cp /tmp/node.conf <BOOTボリューム>/node.conf"
+# macOS では boot パーティションをマウントして自動で流し込む
+INJECTED=""
+if [ "$(uname)" = "Darwin" ]; then
+  diskutil mount "${DEV}s1" >/dev/null 2>&1 || true
+  MP=$(diskutil info "${DEV}s1" 2>/dev/null | sed -n 's/^[[:space:]]*Mount Point:[[:space:]]*//p')
+  if [ -n "$MP" ] && [ -d "$MP" ]; then
+    cp /tmp/node.conf "$MP/node.conf"
+    echo "node.conf を $MP に書き込みました"
+    INJECTED=1
+    diskutil eject "$DEV" >/dev/null 2>&1 || true
+  fi
+fi
+if [ -z "$INJECTED" ]; then
+  echo "node.conf を boot パーティションへ手動コピーしてください (FAT なので Finder/エクスプローラ可):"
+  echo "  cp /tmp/node.conf <BOOTボリューム>/node.conf"
+fi
 echo "完了したら対象マシンを起動し、ssh riya@${IP} で疎通確認。"
