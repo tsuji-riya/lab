@@ -6,7 +6,10 @@ set -eu
 # 管理ユーザー (鍵は overlay で配置済み)
 id riya >/dev/null 2>&1 || adduser -D -s /bin/sh riya
 addgroup riya wheel || true
-chmod 700 /home/riya/.ssh && chmod 600 /home/riya/.ssh/authorized_keys
+# authorized_keys は image に入れない (node.conf 経由で初回起動時に注入)。
+# ここでは .ssh ディレクトリだけ用意する
+mkdir -p /home/riya/.ssh
+chmod 700 /home/riya/.ssh
 chown -R riya:riya /home/riya
 
 # サービス有効化 (実測: cgroups / iscsid / local は全台 default)

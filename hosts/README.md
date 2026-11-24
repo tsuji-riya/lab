@@ -72,7 +72,9 @@ ansible-playbook bootstrap-cluster.yml          # 初回のみ: クラスタ全�
 
 この repo は公開する前提で線引きする (詳細は `SECURITY.md`)。
 
-- **入れてよい**: SSH 公開鍵、192.168.1.0/24 の IP 割当、ホスト名、world。
+- **入れてよい**: 192.168.1.0/24 の IP 割当、ホスト名、world。
+  SSH 公開鍵も本来は公開して安全なものだが、この repo では念のため
+  入れない設計にした (焼き込み時に node.conf 経由で注入する)。
   既存の公開 repo `lab` に既出の情報であり、公開による増分リスクはほぼ無い
 - **絶対に入れない**: 秘密鍵、パスワード、k3s token、Vault 平文、実機の
   シリアル/MAC。そもそも設計上、repo に置く必要が生じないようにしてある
@@ -88,8 +90,10 @@ ansible-playbook bootstrap-cluster.yml          # 初回のみ: クラスタ全�
 
 - k3s token は image にも Git にも入れない。`bootstrap-cluster.yml` が node1 で
   生成し、実行時にメモリ上でのみ各ノードへ配る。恒常保存が必要なら Ansible Vault。
-- SSH は公開鍵のみ。公開鍵は `image/overlay/home/riya/.ssh/authorized_keys` に
-  コミットしてよい (公開鍵は秘密ではない)。秘密鍵は Mac 側だけ。
+- SSH は公開鍵のみ。公開鍵は Git にも image にも入れず、`flash.sh` が
+  焼き込み時に Mac の `~/.ssh/lab_admin.pub` を node.conf へ埋め込み、
+  初回起動で authorized_keys に配置する。秘密鍵は Mac 側だけ。
+  鍵を差し替えても image の再ビルドは不要になる利点もある。
 - GitHub Secrets は image 生成に不要。使うのは Release 発行権限のみ。
 - image の暗号化は age。公開鍵は `image/age-recipient.txt` にコミットし、
   秘密鍵は Mac の `~/.config/lab-hosts-age.txt` にだけ置く。生成は一度だけ:

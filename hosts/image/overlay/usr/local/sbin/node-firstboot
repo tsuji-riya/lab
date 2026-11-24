@@ -17,6 +17,15 @@ done
 # SSH ホスト鍵をこの台専用に生成 (image には焼いていない)
 [ -f /etc/ssh/ssh_host_ed25519_key ] || ssh-keygen -A
 
+# 管理用公開鍵は node.conf 経由で受け取る (Git にも image にも入れない)
+if [ -n "${SSH_PUBKEY:-}" ]; then
+  mkdir -p /home/riya/.ssh
+  echo "$SSH_PUBKEY" > /home/riya/.ssh/authorized_keys
+  chmod 700 /home/riya/.ssh
+  chmod 600 /home/riya/.ssh/authorized_keys
+  chown -R riya:riya /home/riya
+fi
+
 hostname "$NODE_HOSTNAME"
 echo "$NODE_HOSTNAME" > /etc/hostname
 cat > /etc/network/interfaces <<EOF

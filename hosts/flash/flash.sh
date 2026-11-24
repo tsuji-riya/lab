@@ -38,11 +38,15 @@ case "$IMG" in
 esac
 sync
 
+PUBKEY_FILE="${PUBKEY_FILE:-$HOME/.ssh/lab_admin.pub}"
+[ -f "$PUBKEY_FILE" ] || { echo "公開鍵が無い: $PUBKEY_FILE (ssh-keygen で ~/.ssh/lab_admin を作る)" >&2; exit 1; }
+PUBKEY=$(cat "$PUBKEY_FILE")
 cat > /tmp/node.conf <<EOF
 NODE_HOSTNAME=${NODE}.k3s.riya.work
 NODE_IP=${IP}
 NODE_GATEWAY=192.168.1.1
 NODE_ROLE=${ROLE}
+SSH_PUBKEY='${PUBKEY}'
 EOF
 echo "node.conf を boot パーティションへ手動コピーしてください (FAT なので Finder/エクスプローラ可):"
 echo "  cp /tmp/node.conf <BOOTボリューム>/node.conf"
