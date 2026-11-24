@@ -25,4 +25,7 @@ nftables
 ca-certificates
 tzdata
 jq
-parted
+cloud-utils-growpart
+# util-linux はメタパッケージで中身を引かないため、firstboot が使うものは明示
+findmnt
+lsblk

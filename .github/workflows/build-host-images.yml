@@ -13,13 +13,17 @@ on:
         description: "Alpine version"
         required: true
         default: "3.24.4"
+      lint_only:
+        description: "lint だけ実行する (host-update-check が bot PR の必須チェックを通すのに使う)"
+        type: boolean
+        default: false
   push:
     tags: ["hosts-v*"]
 
+# 既定は読み取りのみ。書き込み権限は承認ゲート付きの build ジョブにだけ与える
+# (lint は版を固定していない pip パッケージを入れるので権限を持たせない)
 permissions:
-  contents: write          # Release 作成
-  id-token: write          # provenance attestation
-  attestations: write
+  contents: read
 
 concurrency:
   group: build-host-images-${{ github.ref }}
@@ -36,7 +40,7 @@ jobs:
       - name: Scan for secrets (push protection の二重化)
         working-directory: hosts
         run: |
-          if grep -rInE 'BEGIN [A-Z ]*PRIVATE KEY|K3S_TOKEN=[^$<{]|token: [A-Za-z0-9+/=]{20,}' \
+          if grep -rInE "BEGIN [A-Z ]*PRIVATE KEY|K3S_TOKEN=[^\$<{]|token: [A-Za-z0-9+/=]{20,}|CF_TUNNEL_TOKEN='[A-Za-z0-9]" \
                --exclude-dir=.git --exclude-dir=out . ; then
             echo "::error::秘密らしき文字列が混入しています。hosts/SECURITY.md を確認してください"
             exit 1
@@ -48,12 +52,19 @@ jobs:
           yamllint hosts/
           ansible-lint hosts/ansible/ || true   # 導入初期は警告止まり、収束後に外す
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
-          shellcheck hosts/image/*.sh hosts/flash/*.sh
+          shellcheck hosts/image/*.sh hosts/flash/*.sh \
+            hosts/image/overlay/usr/local/sbin/node-firstboot \
+            hosts/image/overlay/etc/init.d/* \
+            hosts/image/overlay/etc/local.d/*.start
 
   build-x86_64:
     needs: lint
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && !inputs.lint_only
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write          # Release 作成
+      id-token: write          # provenance attestation
+      attestations: write
     environment: image-release   # ← 実行承認ゲート (required reviewers + wait timer、公開 repo では無料)
     defaults: { run: { working-directory: hosts } }
     steps:
@@ -76,11 +87,20 @@ jobs:
         run: |
           gh release create "${GITHUB_REF_NAME}" --generate-notes --title "host images ${GITHUB_REF_NAME}" || true
           gh release upload "${GITHUB_REF_NAME}" hosts/out/* --clobber
+      - name: Upload artifact (タグ無し実行時の受け渡し用)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: host-image-x86_64
+          path: hosts/out/*
 
   build-aarch64:
     needs: lint
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && !inputs.lint_only
     runs-on: ubuntu-24.04-arm   # ネイティブ arm runner (公開 repo は 4vCPU/16GB・無料無制限)
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     environment: image-release
     defaults: { run: { working-directory: hosts } }
     steps:

@@ -9,8 +9,10 @@ command="/usr/bin/cloudflared"
 command_args="tunnel --no-autoupdate run --token-file /etc/cloudflared/token"
 command_background="yes"
 pidfile="/run/${RC_SVCNAME}.pid"
-output_log="/var/log/cloudflared.log"
-error_log="/var/log/cloudflared.log"
+# /var/log は 64M の tmpfs。ファイルに直接吐くと無制限に伸びるので syslog
+# (busybox syslogd がサイズでローテートする) に流す
+output_logger="logger -t cloudflared -p daemon.info"
+error_logger="logger -t cloudflared -p daemon.err"
 
 depend() {
   need net

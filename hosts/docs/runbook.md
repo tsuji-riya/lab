@@ -3,9 +3,13 @@
 ## 新規ノード追加 / 台交換
 1. Actions で image をビルド (または直近 Release を流用)
 2. ディスクを取り出せる台 (Pi の USB SSD): `flash/flash.sh` で書き込み + node.conf 注入
-3. 起動 → `ssh riya@<ip>` 疎通
+3. 起動 → `ssh-keygen -R <ip>` (焼き直した台はホスト鍵が変わる) → `ssh riya@<ip>` 疎通
 4. `ansible-playbook site.yml --limit <node>`
 5. agent なら join は bootstrap の該当 play を単体実行
+   (`ansible-playbook bootstrap-cluster.yml --limit node1,<node>`。
+   Longhorn の既定ディスク用ラベル・注釈もここで付く)
+6. ホスト鍵が変わったので、Environment `host-ops` の `HOST_OPS_KNOWN_HOSTS`
+   を作り直す (下の「Cloudflare Tunnel の初期設定」2.)
 
 ## mini PC (内蔵 SSD が取り出せない台)
 `flash/install-mini-pc.sh --node node1 --image <...img.zst.age> --usb-device /dev/disk6`
@@ -28,9 +32,18 @@ image は Release 単位で不変。前の Release の image を焼き直すの�
 Ansible の変更は Git の revert = 次回収束で戻る。
 
 ## 壊れたとき (break-glass)
-鍵を失った場合のみ、モニタ直結で root コンソール (パスワードはロック済みなので
-シングルユーザーモード) から authorized_keys を差し替える。手順を使ったら
-この repo に issue を残すこと (監査の代替)。
+鍵を失った場合のみ、物理アクセスでカーネル引数に `init=/bin/sh` を足して
+起動し、root シェルから authorized_keys を差し替える (root はパスワードが
+ロック済みなので、シングルユーザーモードではログインできない)。
+
+- Pi: SSD を Mac に挿し、FAT 領域の `cmdline.txt` の行末に ` init=/bin/sh` を足す
+- mini PC: 起動時の systemd-boot メニューで `e` を押し、options の末尾に
+  ` init=/bin/sh` を足して Enter
+
+シェルでは `mount -o remount,rw /` してから作業し、終わったら `sync` して
+電源を切り、Pi は cmdline.txt を元に戻す。**この手順は未演習**なので、
+最初に使う前に node7 で一度試すこと。使ったらこの repo に issue を残すこと
+(監査の代替)。
 
 ## GitHub からホスト OS を変更する (パッケージ更新 / 再起動)
 
@@ -39,17 +52,22 @@ Actions の **Host ops** を手動実行する。入力は operation
 (node7 単体 → agents → servers のリング順を想定)。
 
 - 実行経路: GitHub-hosted runner が **Cloudflare Tunnel (Access SSH)
-  経由** でホストに SSH する (self-hosted runner は使わない)。
+  経由** でホストに SSH し、kubectl は Access の TCP トンネル
+  (`lab-k3s-api.riya.work`) 経由で API に届く (self-hosted runner は使わない)。
   承認と秘密は Environment `host-ops` に集約: required reviewers の
-  承認が無いと始まらず、SSH 秘密鍵・kubeconfig は Environment
-  シークレットとして承認済みジョブにしか渡らない
-- 再起動は drain → reboot → uncordon → Ready 確認まで playbook が
-  面倒を見て、`serial: 1` で必ず1台ずつ
+  承認が無いと始まらず、CI 用 SSH 秘密鍵・known_hosts・kubeconfig は
+  Environment シークレットとして承認済みジョブにしか渡らない
+- 更新も再起動も `serial: 1` で1台ずつ。再起動は drain → reboot →
+  Ready 確認 → uncordon。drain が失敗したら (Longhorn の退避待ちの
+  タイムアウトなど) その場で止まり、再起動しない
 - 既存の system-upgrade-controller の週次 Plan (日曜 03:00) は定期
   パッチ用に残し、こちらはオンデマンド用。同じ台に同時にかち合う
   使い方はしない
 - 版の検知は分担: Actions とコンテナ image は Dependabot、k3s と
-  Alpine のピンは週次 workflow (host-update-check) が PR を作る
+  Alpine のピンは週次 workflow (host-update-check) が PR を作る。
+  前提: Settings → Actions → General の "Allow GitHub Actions to create and
+  approve pull requests" を有効にする。bot PR の lint は workflow_dispatch
+  (lint_only) で自動実行され、必須チェックを満たす
 
 ### Cloudflare Tunnel の初期設定 (1回だけ)
 
@@ -66,9 +84,19 @@ Zero Trust の画面で手作業する項目はない。
      に落ちる (flash.sh が焼き込み時に node.conf 経由で渡す)
    - サービストークンが GitHub シークレット `CF_ACCESS_CLIENT_ID` /
      `CF_ACCESS_CLIENT_SECRET` に登録される
-2. Environment `host-ops` のシークレットに `LAB_ADMIN_SSH_KEY`
-   (Mac の ~/.ssh/lab_admin の中身) と `KUBECONFIG_B64`
-   (`base64 -i ~/.kube/config` の出力) を登録する
+2. Environment `host-ops` のシークレットに以下を登録する
+   (旧 `LAB_ADMIN_SSH_KEY` は本人の鍵なので削除する):
+   - `HOST_OPS_SSH_KEY`: CI 専用鍵 `~/.ssh/lab_ci` の中身
+     (`ssh-keygen -t ed25519 -f ~/.ssh/lab_ci -N ''` で作る。公開鍵は
+     flash.sh が node.conf 経由で配る。既存の台には
+     `~/.ssh/lab_ci.pub` を `/home/riya/.ssh/authorized_keys` に追記する)
+   - `HOST_OPS_KNOWN_HOSTS`: 各ノードのホスト鍵を、トンネルの
+     ホスト名で引ける形にしたもの。LAN 内の Mac で作る:
+     `for n in 1 2 3 4 5 6 7; do ssh-keyscan -t ed25519 192.168.1.$((9+n)) 2>/dev/null | sed "s/^[^ ]*/ssh-node$n.riya.work/"; done`
+     (台を焼き直すたびに作り直す。古いままだと Host ops は接続を拒否する)
+   - `KUBECONFIG_B64`: `base64 -i ~/.kube/config` の出力。接続先は
+     workflow が 127.0.0.1:6443 (トンネルの口) に書き換えるので LAN の
+     IP のままでよい
 
 注意: Host ops は workflow_dispatch 専用。pull_request トリガーを
 足さないこと (承認なしに Environment シークレットへ到達する経路を

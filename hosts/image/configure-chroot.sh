@@ -38,18 +38,50 @@ done
 for svc in root localmount hostname sysctl modules hwdrivers bootmisc seedrng swap syslog; do
   [ -e "/etc/init.d/$svc" ] && rc-update add "$svc" boot
 done
+# Pi は RTC を持たない。swclock は前回停止時刻から時計を始めるので、
+# ntpd が同期するまでの間に時刻が 1970 年へ戻って TLS 検証が全滅するのを防ぐ
+if [ "$(uname -m)" = aarch64 ]; then
+  rc-update add swclock boot
+fi
 rc-update add networking boot || true
 
 # cloudflared は Alpine のパッケージに無いため、公式の静的バイナリを
 # 版固定で入れる (現行ホストの node1 もバイナリ配置のはず)
+# sha256 は版を上げるときに公式 release の成果物から取り直すこと
 CF_VERSION="2026.11.2"
 case "$(uname -m)" in
-  x86_64)  CF_ARCH=amd64 ;;
-  aarch64) CF_ARCH=arm64 ;;
+  x86_64)  CF_ARCH=amd64 CF_SHA256=56f13335143ec0e22772963290683a84a04114a35ec64cbc794a4d39ff9bb8cf ;;
+  aarch64) CF_ARCH=arm64 CF_SHA256=04a7b7f08bce85d56b26ffe1fdbfbb21a074495a363d16f0783c40e25b5c5281 ;;
   *) echo "unknown arch: $(uname -m)" >&2; exit 1 ;;
 esac
 curl -fsSL "https://github.com/cloudflare/cloudflared/releases/download/${CF_VERSION}/cloudflared-linux-${CF_ARCH}" -o /usr/bin/cloudflared
+echo "${CF_SHA256}  /usr/bin/cloudflared" | sha256sum -c
 chmod 755 /usr/bin/cloudflared
+
+# x86: 実機 UEFI が読むのはリムーバブル既定パス EFI/BOOT/BOOTX64.EFI だけ。
+# alpine-make-vm-image は EFI シェル用の startup.nsh しか置かないため、
+# systemd-boot をそこへ置き、カーネルを直接指すエントリを書く。
+# ESP は /boot にマウントされ、kernel / initramfs も ESP 上にある。
+# ファイル名は版に依存しないので apk でカーネルを上げてもエントリは不変
+if [ "$(uname -m)" = x86_64 ]; then
+  ROOT_SPEC=$(awk '$2 == "/" { print $1 }' /etc/fstab)
+  case "$ROOT_SPEC" in
+    UUID=*) ;;
+    *) echo "root の UUID が fstab から引けない: $ROOT_SPEC" >&2; exit 1 ;;
+  esac
+  # build-x86.sh の --initfs-features (nvme/ata/usb) で initramfs を作り直す。
+  # カーネル導入時点の initramfs は機能設定より前に作られている
+  mkinitfs "$(ls /lib/modules)"
+  install -D -m 644 /usr/lib/systemd/boot/efi/systemd-bootx64.efi /boot/EFI/BOOT/BOOTX64.EFI
+  mkdir -p /boot/loader/entries
+  printf 'default lab.conf\ntimeout 3\n' > /boot/loader/loader.conf
+  {
+    echo "title   Alpine Linux (lab)"
+    echo "linux   /vmlinuz-lts"
+    echo "initrd  /initramfs-lts"
+    echo "options root=${ROOT_SPEC} rootfstype=ext4 modules=sd-mod,usb-storage,ext4,nvme quiet"
+  } > /boot/loader/entries/lab.conf
+fi
 
 # 供給元記録: この image に入っているパッケージの版一覧
 mkdir -p /etc/lab
@@ -70,4 +102,9 @@ passwd -l root || true
 # 生成してしまうため、ここで必ず消す。初回起動時に node-firstboot が
 # 台ごとに生成する (全台同一のホスト鍵 + 公開 image は impersonation の温床)
 rm -f /etc/ssh/ssh_host_*
+
+# ビルド環境 (runner / docker) の resolv.conf を image に残さない。
+# runner 固有の 127.0.0.53 などが焼かれると実機で名前解決できない。
+# 実機の resolv.conf は node-firstboot が node.conf から書く
+rm -f /etc/resolv.conf
 echo "chroot configure done"

@@ -1,9 +1,16 @@
 ---
 timezone: Asia/Tokyo
 admin_user: riya
+# 初回インストール時の版。以後の版上げは SUC の Plan
+# (infrastructure/k3s-upgrade/plan.yaml の spec.version) が正本で、
+# host-update-check が両方を同時に書き換える。ここだけ変えても稼働中の台は上がらない
 k3s_version: "v1.37.2+k3s1"
-# join 先は DNS 名に寄せる (要判断 1)。3台の CP を返す A レコードを用意すること。
-k3s_api_host: "api.k3s.riya.work"
+# join 先は node1 の IP に固定する。DNS 名に寄せる案は、bootstrap 時点で
+# 生きているのが node1 だけなので3台を返す名前だと join が当たり外れになるのと、
+# レコード管理と --tls-san が増えるわりに利点が「起動時一度きりの依存」だけなので見送った
+k3s_api_host: "192.168.1.10"
 k3s_api_port: 6443
 lan_cidr: "192.168.1.0/24"
+# Longhorn に既定ディスクを作らせる台 (Pi の USB SSD)。README のノード構成と一致させる
+longhorn_disk_tags: ["ssd"]
 # k3s_token はここに書かない。bootstrap 時に node1 から取得し実行中のみ保持する。

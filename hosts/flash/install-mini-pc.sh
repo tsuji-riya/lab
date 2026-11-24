@@ -4,11 +4,12 @@
 #
 # 流れ:
 #   1. このスクリプトが USB メモリに node image を書く (flash.sh を流用)
-#   2. ユーザーが node.conf を USB の FAT 領域にコピーし、mini PC を USB 起動
+#   2. (macOS なら node.conf は flash.sh が自動注入) mini PC を USB 起動
 #      → 初回起動処理で IP が付き、Mac から SSH できる状態になる
 #   3. このスクリプトが Mac 側で復号した image を SSH 越しに dd で内蔵へ流す
 #      (age の秘密鍵は Mac から出ない。内蔵ディスクは起動元ではないので安全)
 #   4. 内蔵側の EFI 領域に node.conf を書き、電源を切る
+#      (USB 側の node.conf は初回起動処理が消すので、Mac から改めて流す)
 #   5. ユーザーが USB を抜いて電源 ON → 内蔵から初回起動
 #
 # 使い方:
@@ -32,13 +33,18 @@ fi
 
 ROW=$(grep "^${NODE}|" flash/nodes.conf) || { echo "nodes.conf に無い: $NODE" >&2; exit 1; }
 IP=$(echo "$ROW" | cut -d'|' -f2)
-SSH="ssh -o StrictHostKeyChecking=accept-new riya@${IP}"
+# USB 起動中の OS と、内蔵から起動した後の OS はホスト鍵が別物になる。
+# known_hosts を汚さないよう、USB 起動中の接続は専用の known_hosts に閉じる
+KH=$(mktemp "${TMPDIR:-/tmp}/known_hosts.XXXXXX")
+trap 'rm -f "$KH"' EXIT
+SSH="ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$KH riya@${IP}"
 
 echo "== 手順1: USB メモリ ($USB) に image を書きます =="
 ./flash/flash.sh --node "$NODE" --image "$IMG" --device "$USB"
 echo
-echo "flash.sh の案内どおり、/tmp/node.conf を USB の FAT 領域へコピーしてください。"
-printf 'コピーが終わったら Enter: '
+echo "macOS では node.conf は自動注入済み。flash.sh が手動コピーを案内した場合だけ、"
+echo "その案内どおり USB の FAT 領域へコピーしてください。"
+printf '準備ができたら Enter: '
 read -r _
 
 echo "== 手順2: mini PC を USB から起動してください =="
@@ -71,16 +77,17 @@ case "$IMG" in
 esac | $SSH "sudo dd of=/dev/${TARGET} bs=4M status=progress conv=fsync"
 
 echo "== 手順6: 内蔵側 EFI 領域に node.conf を書きます =="
-# USB 起動側の EFI 領域 (/boot/efi) にある node.conf を、内蔵側 EFI へコピーする
-$SSH "
+# dd 直後はカーネルが古いパーティション表を見ているので、先に読み直させる。
+# node.conf は Mac で生成し直して標準入力で流す (token を一時ファイルに置かない)
+./flash/flash.sh --node "$NODE" --emit-conf | $SSH "
   set -eu
-  if [ -f /boot/efi/node.conf ]; then SRC=/boot/efi/node.conf;
-  elif [ -f /boot/node.conf ]; then SRC=/boot/node.conf;
-  else echo 'USB 側に node.conf が無い' >&2; exit 1; fi
+  sudo partx -d /dev/${TARGET} 2>/dev/null || true
+  sudo partx -a /dev/${TARGET}
+  sudo mdev -s
   ESP=\$(sudo blkid -o device -t TYPE=vfat /dev/${TARGET}* | head -n 1)
   [ -n \"\$ESP\" ] || { echo '内蔵側の EFI 領域が見つからない' >&2; exit 1; }
   sudo mount \"\$ESP\" /mnt
-  sudo cp \"\$SRC\" /mnt/node.conf
+  sudo tee /mnt/node.conf >/dev/null
   ls -l /mnt/node.conf
   sudo umount /mnt
   sync
@@ -90,4 +97,6 @@ $SSH "
 echo "== 手順7: 電源を切ります =="
 $SSH "sudo poweroff" || true
 echo "USB メモリを抜いてから電源を入れてください。内蔵ディスクから初回起動します。"
+# 内蔵から起動した OS はホスト鍵が新しくなるので、Mac 側の古い記録を消しておく
+ssh-keygen -R "$IP" >/dev/null 2>&1 || true
 echo "起動後は ssh riya@${IP} で確認し、ansible-playbook site.yml --limit ${NODE} を実行。"

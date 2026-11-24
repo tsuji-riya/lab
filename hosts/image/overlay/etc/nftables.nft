@@ -1,3 +1,9 @@
+# 自分のテーブルだけを作り直す (flush ruleset は kube-proxy / flannel が
+# iptables-nft で作ったテーブルまで消すので使わない)。宣言してから消すのは
+# 「存在しなくてもエラーにしない」ための nft の定石
+table inet filter
+delete table inet filter
+
 table inet filter {
   chain input {
     type filter hook input priority 0; policy drop;
@@ -5,6 +11,10 @@ table inet filter {
     ct state established,related accept
     ip protocol icmp accept
     ip6 nexthdr icmpv6 accept
+    # k3s 既定の Pod CIDR / Service CIDR。Pod から node IP:6443 等へ来る通信は
+    # 送信元が Pod IP のまま input に届く (同一ノード宛ては SNAT されない)。
+    # これを落とすと server ノード上の Pod が API に繋がらない
+    ip saddr { 10.42.0.0/16, 10.43.0.0/16 } accept
     # 管理は LAN からの SSH のみ。k3s 等の追加ポートは Ansible の role が
     # /etc/nftables.d/ に断片を置いて解放する (ここを直接書き換えない)。
     ip saddr 192.168.1.0/24 tcp dport 22 accept

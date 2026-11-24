@@ -32,20 +32,23 @@ image の Release 承認 = 「この定義で焼いてよい」、flash の実�
 |---|---|---|
 | image | `image/` + Actions | Alpine 3.24、パッケージ world、鍵のみ sshd、管理ユーザー、nftables 既定拒否、first-boot |
 | identity | `flash/` | ノード固有値 (hostname / IP / role) は image に焼かず書き込み時に注入。image は arch ごとに1種類だけ |
-| config | `ansible/` | k3s 導入・join、sysctl、時刻同期、監視系など起動後の desired state 全て |
+| config | `ansible/` | k3s 導入・join、sysctl、時刻同期など起動後の desired state。image と共通のファイルは overlay を正本として再配布する (中身を書き写さない) |
 | cluster | 既存 `lab` repo | Flux 以降は従来通り。ここはホスト層だけ |
 
 ## image 生成方式 (調査済み 2026-11-25)
 
 - **x86_64 (node1-3, mini PC)**: Alpine 公式 `alpine-make-vm-image` v0.13.3
-  (sha1 固定で取得)。UEFI / EFI-stub、raw image。GitHub Actions 上で約32秒という
-  公式実績があり、KVM 不要なので hosted runner でそのまま動く。
+  (sha1 固定で取得)。UEFI、raw image。KVM 不要なので hosted runner でそのまま動く。
+  VM 向けツールなので実機向けに3点を上書きしている: カーネルは `linux-lts`
+  (既定の `linux-virt` は実機ドライバが乏しい)、initramfs に nvme/ata/usb を追加、
+  ブートローダは systemd-boot を `EFI/BOOT/BOOTX64.EFI` に配置 (ツールは
+  EFI シェル用の `startup.nsh` しか置かず、実機ファームウェアからは起動できない)。
 - **aarch64 (node4-7, Raspberry Pi)**: 公式 rpi tarball は diskless 配布で
   x86 (ext4 の sys モード) と運用形態が揃わないため使わない。ネイティブ arm
   runner (`ubuntu-24.04-arm`、公開 repo なら 4vCPU/16GB が無料・無制限) 上で
   `apk-tools-static` により ext4 root を sys モード構築し、boot は FAT に
   raspberrypi-bootloader + linux-rpi を配置する自前アセンブリ。world と
-  overlay は x86 と完全共通にしてドリフトを作らない。初回は node7 実機での
+  overlay は x86 と共通 (arch 固有のパッケージだけ `packages.<arch>` に分ける)。初回は node7 実機での
   起動確認までを「未検証の前提」とし、詰まったら runbook 側に記録する。
 - 両 arch とも成果物は age 暗号化した `.img.zst.age` + その `.sha256` を
   Release に添付し (平文は CI 上でも Release にも残さない)、
@@ -55,7 +58,8 @@ image の Release 承認 = 「この定義で焼いてよい」、flash の実�
 ## 使い方
 
 ```sh
-# 1. image を作る: Actions の Build images を手動実行 or v* タグ
+# 1. image を作る: Actions の Build host images を手動実行 (Artifact で受け取る)
+#    or hosts-v* タグ (Release に添付される)
 # 2. Release から暗号化 image と sha256 を取得し検証
 sha256sum -c alpine-3.24.4-x86_64.img.zst.age.sha256
 
@@ -91,8 +95,10 @@ ansible-playbook bootstrap-cluster.yml          # 初回のみ: クラスタ全�
 - k3s token は image にも Git にも入れない。`bootstrap-cluster.yml` が node1 で
   生成し、実行時にメモリ上でのみ各ノードへ配る。恒常保存が必要なら Ansible Vault。
 - SSH は公開鍵のみ。公開鍵は Git にも image にも入れず、`flash.sh` が
-  焼き込み時に Mac の `~/.ssh/lab_admin.pub` を node.conf へ埋め込み、
-  初回起動で authorized_keys に配置する。秘密鍵は Mac 側だけ。
+  焼き込み時に Mac の `~/.ssh/lab_admin.pub` (本人用) と `~/.ssh/lab_ci.pub`
+  (Host ops 用) を node.conf へ埋め込み、初回起動で authorized_keys に配置する。
+  CI 用の鍵を分けているのは、CI の権限だけを失効できるようにするため。
+  node.conf はトンネル token を含むので、初回起動処理が適用後に削除する。
   鍵を差し替えても image の再ビルドは不要になる利点もある。
 - GitHub Secrets は image 生成に不要。使うのは Release 発行権限のみ。
 - image の暗号化は age。公開鍵は repo に置かず、Actions Secret の
@@ -126,10 +132,21 @@ overlay と Ansible base ロールに取り込み済み。
 /etc/hosts の `nodeN.my.domain` は setup-alpine の下書き残りと判断し、
 first-boot が正しい FQDN で書く形にした。
 
-## 未確定 (要判断)
+## 版の正本
 
-1. agent の join 先: 現行は node1 の IP 固定。今回は DNS 名
-   `api.k3s.riya.work` (3台 CP を返す) に寄せる案を group_vars に入れてある。
-   join は起動時の一度きりの依存なので、ダメなら node1 固定に戻すだけ。
+- k3s: 稼働中の版は SUC の Plan (`infrastructure/k3s-upgrade/plan.yaml` の
+  `spec.version`) が正本。`ansible/group_vars/all.yml` の `k3s_version` は
+  初回インストール時だけ使う。週次の host-update-check が両方を同時に書き換える
+  PR を作り、マージが版上げの承認になる (マージすると SUC が全台を上げる)。
+- Alpine: image ビルドの既定版。適用は image 再ビルド + 焼き直し。
+  日々のパッケージ更新は SUC の alpine-os Plan (週次) と Host ops (随時)。
+
+## 決定済み (旧「未確定」)
+
+1. agent / server の join 先は node1 の IP 固定。DNS 名 (3台 CP を返す名前) は、
+   bootstrap 時点で生きているのが node1 だけで join が当たり外れになるのと、
+   レコード管理と `--tls-san` が増えるわりに利点が「起動時一度きりの依存」だけ
+   なので見送った。
 2. sysctl 99-ssd.conf は現行 x86 のみにあり Pi に無い (逆転疑惑)。
-   Ansible では全台共通に統一してある。Pi の USB SSD 実測で問題が出たら分ける。
+   image / Ansible とも全台共通に統一してある。Pi の USB SSD 実測で問題が
+   出たら分ける (未検証)。

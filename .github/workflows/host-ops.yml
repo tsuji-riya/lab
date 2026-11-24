@@ -6,7 +6,7 @@ name: Host ops
 # 経由でホストに SSH する (self-hosted runner は使わない)。承認と
 # 秘密の境界は Environment host-ops に寄せてある:
 # - required reviewers の承認が無いとジョブが始まらない
-# - SSH 秘密鍵・kubeconfig は Environment シークレットに置き、
+# - CI 専用の SSH 秘密鍵・known_hosts・kubeconfig は Environment シークレットに置き、
 #   承認済みジョブにしか渡らない
 # - Cloudflare 側は Access のサービストークンポリシーでこの経路を許可
 #
@@ -50,26 +50,56 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-      - name: Install cloudflared
-        run: |
-          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /tmp/cloudflared
-          sudo install -m 755 /tmp/cloudflared /usr/local/bin/cloudflared
-      - name: Prepare SSH key and kubeconfig (Environment secrets)
+      - name: Install cloudflared (版と sha256 を固定)
         env:
-          LAB_ADMIN_SSH_KEY: ${{ secrets.LAB_ADMIN_SSH_KEY }}
+          CF_VERSION: "2026.11.2"
+          CF_SHA256: 56f13335143ec0e22772963290683a84a04114a35ec64cbc794a4d39ff9bb8cf
+        run: |
+          curl -fsSL "https://github.com/cloudflare/cloudflared/releases/download/${CF_VERSION}/cloudflared-linux-amd64" -o /tmp/cloudflared
+          echo "${CF_SHA256}  /tmp/cloudflared" | sha256sum -c
+          sudo install -m 755 /tmp/cloudflared /usr/local/bin/cloudflared
+      - name: Install Ansible and kubectl (版を固定)
+        env:
+          KUBECTL_VERSION: v1.37.2
+          KUBECTL_SHA256: c04487523e7aa7d1493f7808174c899db93d7a9cf57531420cd76b9bd415f8f4
+        run: |
+          pip install --quiet "ansible-core==2.22.*"
+          ansible-galaxy collection install -r hosts/ansible/requirements.yml
+          curl -fsSLO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          echo "${KUBECTL_SHA256}  kubectl" | sha256sum -c
+          sudo install -m 755 kubectl /usr/local/bin/kubectl
+      # runner は LAN に届かないので、deploy workflow と同じく Access の TCP
+      # トンネルで API を 127.0.0.1:6443 に引き込む (k3s の証明書は 127.0.0.1 を含む)
+      - name: Open tunnel to k3s API
+        env:
+          TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          nohup cloudflared access tcp --hostname lab-k3s-api.riya.work --url 127.0.0.1:6443 > /tmp/cloudflared-api.log 2>&1 &
+          for _ in $(seq 1 20); do
+            (echo > /dev/tcp/127.0.0.1/6443) 2>/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/cloudflared-api.log
+          exit 1
+      - name: Prepare SSH key, known_hosts and kubeconfig (Environment secrets)
+        env:
+          HOST_OPS_SSH_KEY: ${{ secrets.HOST_OPS_SSH_KEY }}
+          HOST_OPS_KNOWN_HOSTS: ${{ secrets.HOST_OPS_KNOWN_HOSTS }}
           KUBECONFIG_B64: ${{ secrets.KUBECONFIG_B64 }}
         run: |
+          : "${HOST_OPS_SSH_KEY:?Environment host-ops に HOST_OPS_SSH_KEY が必要}"
+          : "${HOST_OPS_KNOWN_HOSTS:?Environment host-ops に HOST_OPS_KNOWN_HOSTS が必要}"
           install -d -m 700 ~/.ssh ~/.kube
-          printf '%s\n' "$LAB_ADMIN_SSH_KEY" > ~/.ssh/lab_admin
-          chmod 600 ~/.ssh/lab_admin
+          printf '%s\n' "$HOST_OPS_SSH_KEY" > ~/.ssh/lab_ci
+          chmod 600 ~/.ssh/lab_ci
+          printf '%s\n' "$HOST_OPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
           printf '%s' "$KUBECONFIG_B64" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
-      - name: Install Ansible and kubectl
-        run: |
-          pip install --quiet ansible-core
-          ansible-galaxy collection install -r hosts/ansible/requirements.yml
-          curl -fsSLO "https://dl.k8s.io/release/$(curl -fsSL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-          sudo install -m 755 kubectl /usr/local/bin/kubectl
+          # Mac の kubeconfig は LAN の IP を向いているので、トンネルの口へ向け直す
+          kubectl config set-cluster "$(kubectl config view --minify -o jsonpath='{.clusters[0].name}')" \
+            --server=https://127.0.0.1:6443
+          kubectl get nodes
       - name: Run ops playbook
         working-directory: hosts/ansible
         env:

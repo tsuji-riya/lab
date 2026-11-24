@@ -1,21 +1,32 @@
 ---
-# k3s_node_mode: server_init | server_join | agent (未指定なら収束のみ)
+# k3s_node_mode: server_init | server_join | agent (未指定なら何もしない)
+# 版上げはここでは扱わない (creates で初回のみ)。稼働中の版は SUC の Plan が正本。
+#
+# token は引数でなく K3S_TOKEN 環境変数で渡す。引数だと install スクリプトが
+# /etc/init.d/k3s (誰でも読める) の command_args に平文で書き込む。
+# 環境変数なら /etc/rancher/k3s/k3s.env (0600) に入る
 - name: Build k3s install arguments
   ansible.builtin.set_fact:
     k3s_node_args: >-
       {{ 'server --cluster-init'
          if k3s_node_mode == 'server_init'
-         else 'server --server https://' + k3s_api_host + ':'
-              + (k3s_api_port | string) + ' --token ' + k3s_token
-         if k3s_node_mode == 'server_join'
-         else 'agent --server https://' + k3s_api_host + ':'
-              + (k3s_api_port | string) + ' --token ' + k3s_token }}
+         else ('server' if k3s_node_mode == 'server_join' else 'agent')
+              + ' --server https://' + k3s_api_host + ':' + (k3s_api_port | string) }}
+      --node-name {{ inventory_hostname }}
+      {{ '--node-label node.longhorn.io/create-default-disk=config'
+         if inventory_hostname in groups['agents'] else '' }}
   when: k3s_node_mode is defined
 
+# node 名は inventory 名 (node1..7) に固定する。既定はホスト名 (FQDN) になり、
+# ops.yml の kubectl drain {{ inventory_hostname }} と食い違うため
 - name: Install k3s
   ansible.builtin.shell: >
+    set -o pipefail &&
     curl -sfL https://get.k3s.io |
     INSTALL_K3S_VERSION={{ k3s_version }} sh -s - {{ k3s_node_args }}
   args:
     creates: /usr/local/bin/k3s
+    executable: /bin/bash
+  environment: "{{ {'K3S_TOKEN': k3s_token} if k3s_token is defined else {} }}"
+  no_log: true
   when: k3s_node_mode is defined

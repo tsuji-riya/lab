@@ -1,5 +1,5 @@
-linux-lts
-grub-efi
+# カーネル (linux-lts) は build-x86.sh の --kernel-flavor lts で入る
+systemd-boot
 linux-firmware-i915
 linux-firmware-intel
 linux-firmware-mediatek

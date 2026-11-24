@@ -10,6 +10,9 @@
 パッケージ一覧。これらは既存の公開 repo `tsuji-riya/lab` にも既出。
 SSH 公開鍵は公開しても安全なものだが、本 repo では入れない設計:
 焼き込み時に Mac から node.conf 経由で注入し、初回起動で配置する。
+node.conf は Cloudflare Tunnel の token を含むため、Mac 側では本人だけが読める
+一時ファイルに置いて注入後に消し、ノード側では初回起動処理が適用後に消す。
+Host ops (CI) の SSH 鍵は本人の鍵と分け、CI の権限だけを失効できるようにしている。
 age の公開鍵は CI が必要とするため Actions Secret の `AGE_RECIPIENT` に
 置く (公開鍵なので Secret 化は秘匿ではなく管理上の都合。値は上書きのみ
 可能で、差し替えたら旧鍵で作られた Release は旧秘密鍵でのみ復号できる)。

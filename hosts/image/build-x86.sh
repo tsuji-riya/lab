@@ -1,7 +1,11 @@
 #!/bin/sh
 # x86_64 (node1-3) 用 raw UEFI image を生成する。
-# 公式 alpine-make-vm-image を版と sha1 で固定して使う (VM 用途だが UEFI/EFI-stub の
-# raw image はベアメタル mini PC でもそのまま起動する)。
+# 公式 alpine-make-vm-image を版と sha1 で固定して使う。VM 向けツールなので
+# 実機向けに3点を上書きする:
+# - カーネル: 既定の linux-virt は実機ドライバが乏しいので lts を指定
+# - initramfs: 既定機能 (kms scsi virtio) に、内蔵 NVMe/SATA と USB 起動用を足す
+# - ブートローダ: ツールは EFI シェル用 startup.nsh しか置かないため、
+#   configure-chroot.sh が systemd-boot を EFI/BOOT/BOOTX64.EFI に置く
 set -eu
 
 ALPINE_VERSION="${ALPINE_VERSION:-3.24.4}"
@@ -36,6 +40,8 @@ docker run --rm --privileged -v "$PWD:/work" -v /lib/modules:/lib/modules:ro -w 
     --image-format raw \
     --image-size 4G \
     --boot-mode UEFI \
+    --kernel-flavor lts \
+    --initfs-features \"kms scsi virtio ata nvme usb\" \
     --packages \"\$(cat .cache/packages.txt)\" \
     --repositories-file image/repositories \
     --fs-skel-dir image/overlay \
