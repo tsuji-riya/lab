@@ -2,13 +2,13 @@ name: Host ops
 
 # ホスト OS の変更 (パッケージ更新 / 再起動) を GitHub から実行する。
 #
-# 実行経路: GitHub-hosted runner が Tailscale 経由でホストに SSH する
-# (self-hosted runner は使わない)。承認と秘密の境界は Environment
-# host-ops に寄せてある:
+# 実行経路: GitHub-hosted runner が Cloudflare Tunnel (Access SSH)
+# 経由でホストに SSH する (self-hosted runner は使わない)。承認と
+# 秘密の境界は Environment host-ops に寄せてある:
 # - required reviewers の承認が無いとジョブが始まらない
-# - SSH 秘密鍵・kubeconfig・Tailscale OAuth は Environment シークレット
-#   に置き、承認済みジョブにしか渡らない
-# - Tailscale の ACL で tag:ci から tag:host の tcp/22 だけに絞る
+# - SSH 秘密鍵・kubeconfig は Environment シークレットに置き、
+#   承認済みジョブにしか渡らない
+# - Cloudflare 側は Access のサービストークンポリシーでこの経路を許可
 #
 # workflow_dispatch 専用。pull_request トリガーは足さないこと。
 
@@ -50,12 +50,10 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-      - name: Connect to tailnet (ephemeral)
-        uses: tailscale/github-action@v3
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
+      - name: Install cloudflared
+        run: |
+          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /tmp/cloudflared
+          sudo install -m 755 /tmp/cloudflared /usr/local/bin/cloudflared
       - name: Prepare SSH key and kubeconfig (Environment secrets)
         env:
           LAB_ADMIN_SSH_KEY: ${{ secrets.LAB_ADMIN_SSH_KEY }}
@@ -76,8 +74,11 @@ jobs:
         env:
           OP: ${{ inputs.operation }}
           TARGET: ${{ inputs.target }}
+          # Cloudflare Access のサービストークン (repo シークレット)
+          TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
-          ansible-playbook ops.yml -i inventory/tailscale.yml \
+          ansible-playbook ops.yml -i inventory/cloudflare.yml \
             -e "op=${OP}" --limit "${TARGET}"
       - name: Summary
         if: always()

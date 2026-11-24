@@ -48,13 +48,13 @@ if [ -n "$DISK" ] && [ -n "$PARTNO" ]; then
   resize2fs "$ROOT_DEV" || true
 fi
 
-# Tailscale 参加 (GitHub Actions からの到達用)。鍵は node.conf 経由で
-# 焼き込み時にだけ渡す。hostname は MagicDNS の短い名前に揃える
-if [ -n "${TS_AUTHKEY:-}" ]; then
-  rc-service tailscaled start || true
-  tailscale up --auth-key="$TS_AUTHKEY" \
-    --hostname="$(echo "$NODE_HOSTNAME" | cut -d. -f1)" \
-    --advertise-tags=tag:host || true
+# Cloudflare Tunnel (GitHub Actions からの SSH 到達用)。トークンは
+# node.conf 経由で焼き込み時にだけ渡し、ファイルに置いてサービス起動
+if [ -n "${CF_TUNNEL_TOKEN:-}" ]; then
+  install -d -m 700 /etc/cloudflared
+  printf '%s' "$CF_TUNNEL_TOKEN" > /etc/cloudflared/token
+  chmod 600 /etc/cloudflared/token
+  rc-service cf-tunnel start || true
 fi
 
 date -u +%FT%TZ > "$MARKER"

@@ -41,13 +41,13 @@ sync
 PUBKEY_FILE="${PUBKEY_FILE:-$HOME/.ssh/lab_admin.pub}"
 [ -f "$PUBKEY_FILE" ] || { echo "公開鍵が無い: $PUBKEY_FILE (ssh-keygen で ~/.ssh/lab_admin を作る)" >&2; exit 1; }
 PUBKEY=$(cat "$PUBKEY_FILE")
-# Tailscale の auth key は任意。Mac にファイルがあれば一緒に埋め込む
-TS_LINE=""
-TS_KEY_FILE="${TS_KEY_FILE:-$HOME/.config/lab-hosts-ts-authkey}"
-if [ -f "$TS_KEY_FILE" ]; then
-  TS_LINE="TS_AUTHKEY='$(cat "$TS_KEY_FILE")'"
+# Cloudflare Tunnel のトークンはノード別。Mac にファイルがあれば埋め込む
+CF_LINE=""
+CF_TOKEN_FILE="${CF_TOKEN_DIR:-$HOME/.config/lab-hosts-cf}/${NODE}.token"
+if [ -f "$CF_TOKEN_FILE" ]; then
+  CF_LINE="CF_TUNNEL_TOKEN='$(cat "$CF_TOKEN_FILE")'"
 else
-  echo "注意: $TS_KEY_FILE が無いので Tailscale 参加はスキップされます"
+  echo "注意: $CF_TOKEN_FILE が無いので Cloudflare Tunnel は無効になります"
 fi
 cat > /tmp/node.conf <<EOF
 NODE_HOSTNAME=${NODE}.k3s.riya.work
@@ -55,7 +55,7 @@ NODE_IP=${IP}
 NODE_GATEWAY=192.168.1.1
 NODE_ROLE=${ROLE}
 SSH_PUBKEY='${PUBKEY}'
-${TS_LINE}
+${CF_LINE}
 EOF
 echo "node.conf を boot パーティションへ手動コピーしてください (FAT なので Finder/エクスプローラ可):"
 echo "  cp /tmp/node.conf <BOOTボリューム>/node.conf"

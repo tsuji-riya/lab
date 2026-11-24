@@ -38,11 +38,11 @@ Actions の **Host ops** を手動実行する。入力は operation
 (package-update / reboot / update-and-reboot) と target
 (node7 単体 → agents → servers のリング順を想定)。
 
-- 実行経路: GitHub-hosted runner が **Tailscale 経由** でホストに SSH
-  する (self-hosted runner は使わない)。承認と秘密は Environment
-  `host-ops` に集約: required reviewers の承認が無いと始まらず、
-  SSH 秘密鍵・kubeconfig・Tailscale OAuth は Environment シークレット
-  として承認済みジョブにしか渡らない
+- 実行経路: GitHub-hosted runner が **Cloudflare Tunnel (Access SSH)
+  経由** でホストに SSH する (self-hosted runner は使わない)。
+  承認と秘密は Environment `host-ops` に集約: required reviewers の
+  承認が無いと始まらず、SSH 秘密鍵・kubeconfig は Environment
+  シークレットとして承認済みジョブにしか渡らない
 - 再起動は drain → reboot → uncordon → Ready 確認まで playbook が
   面倒を見て、`serial: 1` で必ず1台ずつ
 - 既存の system-upgrade-controller の週次 Plan (日曜 03:00) は定期
@@ -51,19 +51,24 @@ Actions の **Host ops** を手動実行する。入力は operation
 - 版の検知は分担: Actions とコンテナ image は Dependabot、k3s と
   Alpine のピンは週次 workflow (host-update-check) が PR を作る
 
-### Tailscale の初期設定 (1回だけ)
+### Cloudflare Tunnel の初期設定 (1回だけ)
 
-1. tailnet を用意し MagicDNS を有効化する
-2. ACL にタグと許可を定義する。要点は CI からホストへの tcp/22 のみ:
-   - tagOwners: `tag:host` と `tag:ci` (ci は OAuth クライアント用)
-   - grants: src `tag:ci` → dst `tag:host`, ip `tcp:22`
-3. ホスト参加用の auth key (reusable、tag:host を付与) を発行し、
-   Mac の `~/.config/lab-hosts-ts-authkey` に保存する。flash.sh が
-   node.conf 経由で初回起動時に使って参加させる
-4. CI 用の OAuth クライアント (tailscale/github-action 用) を発行し、
-   `TS_OAUTH_CLIENT_ID` / `TS_OAUTH_SECRET` を **Environment
-   host-ops のシークレット** に登録する
-5. 同じく Environment シークレットに `LAB_ADMIN_SSH_KEY`
+ホスト側は image 同梱の cloudflared が、ノード別のトンネルを張って
+SSH を公開ホスト名に紐付ける。到達は Access のポリシーで制御する。
+
+1. Zero Trust → Networks → Tunnels で、ノードごとにトンネルを作成
+   する (名前は node1 〜 node7)。発行されるトークンを Mac に
+   `~/.config/lab-hosts-cf/nodeN.token` として保存する。flash.sh が
+   node.conf 経由で初回起動時に渡し、ホストの cf-tunnel サービスが使う
+2. 各トンネルの Public Hostname に `ssh-nodeN.riya.work` →
+   `ssh://localhost:22` を割り当てる
+3. Access アプリケーションで ssh-node*.riya.work を保護し、
+   サービストークンを許可するポリシーを付ける。GitHub Actions は
+   repo シークレット `CF_ACCESS_CLIENT_ID` /
+   `CF_ACCESS_CLIENT_SECRET` (既存) を cloudflared access の
+   ProxyCommand 経由で使う。対人では GitHub ログインでの
+   ブラウザ SSH も同じ入口で許可できる
+4. Environment `host-ops` のシークレットに `LAB_ADMIN_SSH_KEY`
    (Mac の ~/.ssh/lab_admin の中身) と `KUBECONFIG_B64`
    (`base64 -i ~/.kube/config` の出力) を登録する
 
