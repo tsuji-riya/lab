@@ -20,17 +20,17 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        # サイト本体は tsuji-riya/fantasy.riya.work でビルドしたイメージ (nginx + EmulatorJS)。ROM は入っていない
-        - name: nginx
-          image: ghcr.io/tsuji-riya/fantasy.riya.work:1.0.14@sha256:9e8a91736df6828fe50ac52b21509290dc7606f03a9cd8ec617ba367d2a6dacc
+        # サイト本体は tsuji-riya/fantasy.riya.work でビルドしたイメージ (自作サーバー + EmulatorJS、scratch)。ROM は入っていない
+        - name: server
+          image: ghcr.io/tsuji-riya/fantasy.riya.work:1.0.18@sha256:4eb87391920613a2d4f1447dfa37488c713d830f1b466f3f506a7a560ee6c4c9
           ports:
             - name: http
               containerPort: 8080
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
-            runAsUser: 101
-            runAsGroup: 101
+            runAsUser: 65534
+            runAsGroup: 65534
             capabilities:
               drop: [ALL]
           resources:
@@ -43,10 +43,3 @@ spec:
             httpGet:
               path: /
               port: http
-          volumeMounts:
-            # nginx のキャッシュと pid 置き場
-            - name: tmp
-              mountPath: /tmp
-      volumes:
-        - name: tmp
-          emptyDir: {}
