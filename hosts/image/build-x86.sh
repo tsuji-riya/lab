@@ -16,7 +16,8 @@ grep -v '^#' image/packages.common image/packages.x86_64 | grep -v '^$' > .cache
 
 # ビルドは Alpine コンテナ内で行う (apk の root 構築が最も素直なため)
 docker run --rm --privileged -v "$PWD:/work" -w /work alpine:3.24 sh -eu -c "
-  apk add --no-cache qemu-img qemu-nbd e2fsprogs sfdisk rsync curl
+  # qemu-nbd のバイナリは qemu-img パッケージに同梱されている (3.24)
+  apk add --no-cache qemu-img e2fsprogs sfdisk rsync curl
   cd .cache
   [ -f alpine-make-vm-image ] || {
     curl -fsSLO https://raw.githubusercontent.com/alpinelinux/alpine-make-vm-image/v${TOOL_VERSION}/alpine-make-vm-image
