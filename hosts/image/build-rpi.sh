@@ -31,6 +31,18 @@ if [ ! -x .cache/apk.static ]; then
   mv .cache/sbin/apk.static .cache/apk.static
 fi
 
+# 署名鍵が無いと APKINDEX が UNTRUSTED になって全パッケージが引けない。
+# alpine-keys から鍵だけを取り出して --keys-dir で渡す
+KEYS_VER=$(curl -fsSL "$MIRROR/main/aarch64/APKINDEX.tar.gz" | tar -xzO APKINDEX 2>/dev/null \
+  | awk '/^P:alpine-keys$/{f=1} f&&/^V:/{print substr($0, 3); exit}')
+[ -n "$KEYS_VER" ] || { echo "alpine-keys の版が引けない" >&2; exit 1; }
+if [ ! -d .cache/keys ]; then
+  mkdir -p .cache/keys
+  curl -fsSL "$MIRROR/main/aarch64/alpine-keys-${KEYS_VER}.apk" -o .cache/alpine-keys.apk
+  tar -xzf .cache/alpine-keys.apk -C .cache/keys etc/apk/keys 2>/dev/null
+fi
+KEYS_DIR="$PWD/.cache/keys/etc/apk/keys"
+
 # 4G image: boot(FAT32 256M) + root(ext4)
 dd if=/dev/zero of="$IMG" bs=1M count=4096 status=none
 sfdisk "$IMG" <<'EOF'
@@ -56,6 +68,7 @@ while IFS= read -r pkg; do
 done < .cache/packages.txt
 sudo .cache/apk.static \
   --repository "$MIRROR/main" --repository "$MIRROR/community" \
+  --keys-dir "$KEYS_DIR" \
   --root "$PWD/mnt-root" --initdb add --no-cache "$@"
 
 # 共通 overlay を重ね、chroot で仕上げ (鍵・サービス有効化・manifest)

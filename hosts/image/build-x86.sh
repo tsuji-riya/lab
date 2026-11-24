@@ -14,8 +14,13 @@ mkdir -p out .cache
 
 grep -v '^#' image/packages.common image/packages.x86_64 | grep -v '^$' > .cache/packages.txt
 
+# alpine-make-vm-image は qemu-nbd を使うため、ホスト (runner) の
+# カーネルに nbd モジュールが必要。コンテナ内からは /lib/modules が
+# 見えず modprobe できないので、ホスト側で先にロードしておく
+sudo modprobe nbd max_part=16
+
 # ビルドは Alpine コンテナ内で行う (apk の root 構築が最も素直なため)
-docker run --rm --privileged -v "$PWD:/work" -w /work alpine:3.24 sh -eu -c "
+docker run --rm --privileged -v "$PWD:/work" -v /lib/modules:/lib/modules:ro -w /work alpine:3.24 sh -eu -c "
   # qemu-nbd のバイナリは qemu-img パッケージに同梱されている (3.24)
   apk add --no-cache qemu-img e2fsprogs sfdisk rsync curl
   cd .cache
