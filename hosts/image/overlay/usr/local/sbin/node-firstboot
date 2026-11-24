@@ -48,5 +48,14 @@ if [ -n "$DISK" ] && [ -n "$PARTNO" ]; then
   resize2fs "$ROOT_DEV" || true
 fi
 
+# Cloudflare Tunnel (GitHub Actions からの SSH 到達用)。トークンは
+# node.conf 経由で焼き込み時にだけ渡し、ファイルに置いてサービス起動
+if [ -n "${CF_TUNNEL_TOKEN:-}" ]; then
+  install -d -m 700 /etc/cloudflared
+  printf '%s' "$CF_TUNNEL_TOKEN" > /etc/cloudflared/token
+  chmod 600 /etc/cloudflared/token
+  rc-service cf-tunnel start || true
+fi
+
 date -u +%FT%TZ > "$MARKER"
 echo "firstboot done: $NODE_HOSTNAME $NODE_IP"

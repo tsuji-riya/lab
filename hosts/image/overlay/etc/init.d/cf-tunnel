@@ -1,0 +1,22 @@
+#!/sbin/openrc-run
+# shellcheck shell=sh disable=SC2034
+# Cloudflare Tunnel (リモート管理トンネル) を token-file で起動する。
+# トークンが無い台では start_pre で静かに失敗する (通常運用に影響しない)。
+
+name="cloudflared tunnel"
+description="Cloudflare Tunnel for SSH access"
+command="/usr/bin/cloudflared"
+command_args="tunnel --no-autoupdate run --token-file /etc/cloudflared/token"
+command_background="yes"
+pidfile="/run/${RC_SVCNAME}.pid"
+output_log="/var/log/cloudflared.log"
+error_log="/var/log/cloudflared.log"
+
+depend() {
+  need net
+  after firewall
+}
+
+start_pre() {
+  [ -s /etc/cloudflared/token ] || { eerror "no tunnel token"; return 1; }
+}

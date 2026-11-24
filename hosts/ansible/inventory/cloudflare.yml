@@ -1,0 +1,28 @@
+---
+# GitHub Actions から Cloudflare Tunnel (Access SSH) 経由で接続する用。
+# ホスト名は Zero Trust 側で各ノードのトンネルに割り当てた公開ホスト名。
+# 認証は cloudflared access が TUNNEL_SERVICE_TOKEN_ID/SECRET を使う。
+all:
+  vars:
+    ansible_ssh_common_args: >-
+      -o ProxyCommand="cloudflared access ssh --hostname %h"
+      -o StrictHostKeyChecking=accept-new
+  children:
+    servers:
+      hosts:
+        node1:
+          ansible_host: ssh-node1.riya.work
+        node2:
+          ansible_host: ssh-node2.riya.work
+        node3:
+          ansible_host: ssh-node3.riya.work
+    agents:
+      hosts:
+        node4:
+          ansible_host: ssh-node4.riya.work
+        node5:
+          ansible_host: ssh-node5.riya.work
+        node6:
+          ansible_host: ssh-node6.riya.work
+        node7:
+          ansible_host: ssh-node7.riya.work
