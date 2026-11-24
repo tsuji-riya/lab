@@ -12,7 +12,9 @@ while [ $# -gt 0 ]; do
     *) echo "unknown arg: $1" >&2; exit 1;;
   esac
 done
-[ -n "$NODE" ] && [ -n "$IMG" ] && [ -n "$DEV" ] || { echo "必須: --node --image --device" >&2; exit 1; }
+if [ -z "$NODE" ] || [ -z "$IMG" ] || [ -z "$DEV" ]; then
+  echo "必須: --node --image --device" >&2; exit 1
+fi
 
 ROW=$(grep "^${NODE}|" "$(dirname "$0")/nodes.conf") || { echo "nodes.conf に無い: $NODE" >&2; exit 1; }
 IP=$(echo "$ROW" | cut -d'|' -f2); ROLE=$(echo "$ROW" | cut -d'|' -f3)

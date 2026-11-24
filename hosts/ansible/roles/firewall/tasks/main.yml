@@ -1,6 +1,8 @@
 ---
 - name: nftables base (image と同じ内容を正本として再配布)
-  copy: { src: "{{ playbook_dir }}/../image/overlay/etc/nftables.nft", dest: /etc/nftables.nft }
+  copy:
+    src: "{{ playbook_dir }}/../image/overlay/etc/nftables.nft"
+    dest: /etc/nftables.nft
 - name: k3s ports fragment (server)
   copy:
     dest: /etc/nftables.d/20-k3s.nft
@@ -25,4 +27,7 @@
       }
   when: inventory_hostname in groups['agents']
 - name: nftables enabled and loaded
-  service: { name: nftables, enabled: true, state: restarted }
+  service:
+    name: nftables
+    enabled: true
+    state: restarted

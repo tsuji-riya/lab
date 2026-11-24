@@ -30,7 +30,6 @@ if [ ! -x .cache/apk.static ]; then
   tar -xzf .cache/apk-tools-static.apk -C .cache sbin/apk.static
   mv .cache/sbin/apk.static .cache/apk.static
 fi
-APK=".cache/apk.static --repository $MIRROR/main --repository $MIRROR/community"
 
 # 4G image: boot(FAT32 256M) + root(ext4)
 dd if=/dev/zero of="$IMG" bs=1M count=4096 status=none
@@ -50,7 +49,14 @@ sudo mount "${LOOP}p2" mnt-root
 
 # rootfs を sys モードで構築 (world は x86 と共通 + rpi 追加分)
 grep -v '^#' image/packages.common image/packages.aarch64 | grep -v '^$' > .cache/packages.txt
-sudo $APK --root "$PWD/mnt-root" --initdb add --no-cache $(cat .cache/packages.txt)
+# パッケージ一覧は1行1パッケージ。位置パラメータへ読み込んでから渡す
+set --
+while IFS= read -r pkg; do
+  [ -n "$pkg" ] && set -- "$@" "$pkg"
+done < .cache/packages.txt
+sudo .cache/apk.static \
+  --repository "$MIRROR/main" --repository "$MIRROR/community" \
+  --root "$PWD/mnt-root" --initdb add --no-cache "$@"
 
 # 共通 overlay を重ね、chroot で仕上げ (鍵・サービス有効化・manifest)
 sudo cp -a image/overlay/. mnt-root/

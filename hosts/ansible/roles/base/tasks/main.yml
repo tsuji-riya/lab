@@ -1,8 +1,14 @@
 ---
 - name: Timezone
-  copy: { src: /usr/share/zoneinfo/Asia/Tokyo, dest: /etc/localtime, remote_src: true }
+  copy:
+    src: /usr/share/zoneinfo/Asia/Tokyo
+    dest: /etc/localtime
+    remote_src: true
 - name: ntpd enabled
-  service: { name: ntpd, enabled: true, state: started }
+  service:
+    name: ntpd
+    enabled: true
+    state: started
 - name: "sysctl (全台共通に統一: 要判断 2)"
   copy:
     dest: /etc/sysctl.d/99-lab.conf
@@ -21,4 +27,6 @@
       AllowUsers {{ admin_user }}
   notify: Reload sshd
 - name: root password locked
-  user: { name: root, password_lock: true }
+  user:
+    name: root
+    password_lock: true
