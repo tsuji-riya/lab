@@ -3,22 +3,24 @@
 # image を丸ごと書き、boot パーティションに node.conf を注入する。
 # macOS / Linux 両対応 (書き込みは dd、注入は FAT マウント前提)。
 set -eu
-NODE="" IMG="" DEV=""
+NODE="" IMG="" DEV="" INJECT_ONLY=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --node) NODE="$2"; shift 2;;
     --image) IMG="$2"; shift 2;;
     --device) DEV="$2"; shift 2;;
+    --inject-only) INJECT_ONLY=1; shift;;
     *) echo "unknown arg: $1" >&2; exit 1;;
   esac
 done
-if [ -z "$NODE" ] || [ -z "$IMG" ] || [ -z "$DEV" ]; then
-  echo "必須: --node --image --device" >&2; exit 1
+if [ -z "$NODE" ] || [ -z "$DEV" ] || { [ -z "$IMG" ] && [ -z "$INJECT_ONLY" ]; }; then
+  echo "必須: --node --device と (--image または --inject-only)" >&2; exit 1
 fi
 
 ROW=$(grep "^${NODE}|" "$(dirname "$0")/nodes.conf") || { echo "nodes.conf に無い: $NODE" >&2; exit 1; }
 IP=$(echo "$ROW" | cut -d'|' -f2); ROLE=$(echo "$ROW" | cut -d'|' -f3)
 
+if [ -z "$INJECT_ONLY" ]; then
 echo "== $NODE ($IP, $ROLE) へ $IMG を $DEV に書きます =="
 echo "対象ディスクを間違えると全データが消えます。5秒後に確認プロンプトを出します。"
 sleep 5
@@ -45,6 +47,7 @@ case "$IMG" in
     sudo dd if="$IMG" of="$WRITE_DEV" bs=4m status=progress;;
 esac
 sync
+fi
 
 PUBKEY_FILE="${PUBKEY_FILE:-$HOME/.ssh/lab_admin.pub}"
 [ -f "$PUBKEY_FILE" ] || { echo "公開鍵が無い: $PUBKEY_FILE (ssh-keygen で ~/.ssh/lab_admin を作る)" >&2; exit 1; }
