@@ -58,6 +58,11 @@ apk info -v > /etc/lab/packages.manifest
 # sudoers.d のパーミッションを正す (緩いと sudo が読み飛ばす)
 chmod 440 /etc/sudoers.d/riya 2>/dev/null || true
 
+# overlay は cp -a で焼かれるため、コピー元 (CI の checkout) の uid が
+# そのまま残る。/etc/sudoers.d が uid 1001 所有だと sudo が読み込みを
+# 拒否する (node7 実機で発覚)。/etc と /usr は全面 root 所有が正常形
+chown -R 0:0 /etc /usr
+
 # sshd は鍵のみ (drop-in が本体)
 passwd -l root || true
 
