@@ -19,6 +19,17 @@ for svc in sshd nftables ntpd cgroups iscsid local cf-tunnel node-firstboot; do
 done
 rc-update add networking boot || true
 
+# cloudflared は Alpine のパッケージに無いため、公式の静的バイナリを
+# 版固定で入れる (現行ホストの node1 もバイナリ配置のはず)
+CF_VERSION="2026.11.2"
+case "$(uname -m)" in
+  x86_64)  CF_ARCH=amd64 ;;
+  aarch64) CF_ARCH=arm64 ;;
+  *) echo "unknown arch: $(uname -m)" >&2; exit 1 ;;
+esac
+curl -fsSL "https://github.com/cloudflare/cloudflared/releases/download/${CF_VERSION}/cloudflared-linux-${CF_ARCH}" -o /usr/bin/cloudflared
+chmod 755 /usr/bin/cloudflared
+
 # 供給元記録: この image に入っているパッケージの版一覧
 mkdir -p /etc/lab
 apk info -v > /etc/lab/packages.manifest

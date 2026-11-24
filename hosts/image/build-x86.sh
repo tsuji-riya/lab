@@ -12,7 +12,7 @@ OUT="out/alpine-${ALPINE_VERSION}-x86_64.img"
 cd "$(dirname "$0")/.."
 mkdir -p out .cache
 
-grep -v '^#' image/packages.common image/packages.x86_64 | grep -v '^$' > .cache/packages.txt
+grep -h -v '^#' image/packages.common image/packages.x86_64 | grep -v '^$' > .cache/packages.txt
 
 # alpine-make-vm-image は qemu-nbd を使うため、ホスト (runner) の
 # カーネルに nbd モジュールが必要。コンテナ内からは /lib/modules が

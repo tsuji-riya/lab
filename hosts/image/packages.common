@@ -22,7 +22,6 @@ wireless-regdb
 # 以下は現行に無い新規分 (硬化と管理用)
 sudo
 nftables
-cloudflared
 ca-certificates
 tzdata
 jq

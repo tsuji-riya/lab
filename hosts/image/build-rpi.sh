@@ -60,7 +60,7 @@ sudo mount "${LOOP}p1" mnt-boot
 sudo mount "${LOOP}p2" mnt-root
 
 # rootfs を sys モードで構築 (world は x86 と共通 + rpi 追加分)
-grep -v '^#' image/packages.common image/packages.aarch64 | grep -v '^$' > .cache/packages.txt
+grep -h -v '^#' image/packages.common image/packages.aarch64 | grep -v '^$' > .cache/packages.txt
 # パッケージ一覧は1行1パッケージ。位置パラメータへ読み込んでから渡す
 set --
 while IFS= read -r pkg; do
