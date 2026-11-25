@@ -17,3 +17,8 @@ variable "k8s_client_key" {
   type      = string
   sensitive = true
 }
+
+variable "github_token" {
+  type      = string
+  sensitive = true
+}

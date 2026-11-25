@@ -1,7 +1,8 @@
 ---
 - name: Reload sysctl
-  command: sysctl -p /etc/sysctl.d/99-lab.conf
+  ansible.builtin.command: sysctl -p /etc/sysctl.d/99-lab.conf
+  changed_when: true
 - name: Reload sshd
-  service:
+  ansible.builtin.service:
     name: sshd
     state: reloaded

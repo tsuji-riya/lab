@@ -14,15 +14,22 @@ done
 [ -n "$CONF" ] || { echo "node.conf not found, skipping"; exit 0; }
 
 # NODE_HOSTNAME= / NODE_IP= / NODE_GATEWAY= / NODE_DNS= / NODE_ROLE=
-# SSH_PUBKEY= / SSH_PUBKEY_CI= / CF_TUNNEL_TOKEN=
+# SSH_PUBKEY= / SSH_PUBKEY_CI= / SSH_HOST_KEY_B64= / CF_TUNNEL_TOKEN=
+# shellcheck source=/dev/null
 . "$CONF"
 GATEWAY="${NODE_GATEWAY:-192.168.1.1}"
 
-# SSH ホスト鍵をこの台専用に生成 (image には焼いていない)
-[ -f /etc/ssh/ssh_host_ed25519_key ] || ssh-keygen -A
+# SSH ホスト鍵は Terraform が台ごとに生成した値を受け取る (焼き直しても不変
+# なので known_hosts を作り直す必要が無い)。無ければこの場で生成する
+if [ -n "${SSH_HOST_KEY_B64:-}" ]; then
+  (umask 077 && echo "$SSH_HOST_KEY_B64" | base64 -d > /etc/ssh/ssh_host_ed25519_key)
+  ssh-keygen -y -f /etc/ssh/ssh_host_ed25519_key > /etc/ssh/ssh_host_ed25519_key.pub
+elif [ ! -f /etc/ssh/ssh_host_ed25519_key ]; then
+  ssh-keygen -q -t ed25519 -N '' -f /etc/ssh/ssh_host_ed25519_key
+fi
 
 # 管理用公開鍵は node.conf 経由で受け取る (Git にも image にも入れない)。
-# CI (Host ops) 用の鍵は本人の鍵と分け、CI だけを失効できるようにする
+# CI (Host converge) 用の鍵は本人の鍵と分け、CI だけを失効できるようにする
 if [ -n "${SSH_PUBKEY:-}" ]; then
   install -d -m 700 -o riya -g riya /home/riya/.ssh
   {

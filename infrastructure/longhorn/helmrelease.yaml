@@ -25,7 +25,7 @@ spec:
       nodeDrainPolicy: block-for-eviction-if-contains-last-replica
       # 既定ディスクは node.longhorn.io/create-default-disk=config ラベルの台
       # (Pi の USB SSD) にだけ、node 注釈の設定 (タグ ssd) どおりに作る。
-      # ラベルと注釈は hosts/ansible/bootstrap-cluster.yml が join 時に付ける。
+      # ラベルと注釈は hosts/ansible の k3s_node ロールが join 時に付ける。
       # Longhorn の node 作成時にだけ効く設定なので、既存ノードのディスクは変わらない
       createDefaultDiskLabeledNodes: true
     persistence:

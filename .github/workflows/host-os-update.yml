@@ -1,0 +1,73 @@
+name: Host OS update
+
+# ホスト OS の更新 + 再起動を今すぐ行う (週次の自動実行を待たない場合)。
+# 実体は SUC の alpine-os Plan で、drain → apk upgrade → 再起動 → uncordon を
+# 1台ずつ行う。ここは週次 CronJob と同じ「Plan の版を書き換えて起動する」
+# Job を1回作るだけなので、ホストへの SSH も追加の秘密も要らない。
+# k3s の版上げは infrastructure/k3s-upgrade/plan.yaml の PR マージで行う。
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: host-os-update
+  cancel-in-progress: false
+
+jobs:
+  trigger:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Install cloudflared and kubectl (版と sha256 を固定)
+        env:
+          CF_VERSION: "2026.11.2"
+          CF_SHA256: 56f13335143ec0e22772963290683a84a04114a35ec64cbc794a4d39ff9bb8cf
+          KUBECTL_VERSION: v1.37.2
+          KUBECTL_SHA256: c04487523e7aa7d1493f7808174c899db93d7a9cf57531420cd76b9bd415f8f4
+        run: |
+          base=https://github.com/cloudflare/cloudflared/releases/download
+          curl -fsSL "$base/${CF_VERSION}/cloudflared-linux-amd64" \
+            -o /tmp/cloudflared
+          echo "${CF_SHA256}  /tmp/cloudflared" | sha256sum -c
+          sudo install -m 755 /tmp/cloudflared /usr/local/bin/cloudflared
+          curl -fsSL -o /tmp/kubectl \
+            "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          echo "${KUBECTL_SHA256}  /tmp/kubectl" | sha256sum -c
+          sudo install -m 755 /tmp/kubectl /usr/local/bin/kubectl
+      # deploy workflow と同じ経路・同じ秘密で API に届く
+      - name: Open tunnel to k3s API
+        env:
+          TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          nohup cloudflared access tcp --hostname lab-k3s-api.riya.work \
+            --url 127.0.0.1:6443 > /tmp/cloudflared.log 2>&1 &
+          for _ in $(seq 1 20); do
+            (echo > /dev/tcp/127.0.0.1/6443) 2>/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/cloudflared.log
+          exit 1
+      - name: Start the alpine-os Plan once
+        env:
+          CA: ${{ secrets.K8S_CLUSTER_CA_CERTIFICATE }}
+          CERT: ${{ secrets.K8S_CLIENT_CERTIFICATE }}
+          KEY: ${{ secrets.K8S_CLIENT_KEY }}
+        run: |
+          d="$RUNNER_TEMP/kube"
+          (umask 077 && mkdir -p "$d" && printf '%s' "$CA" > "$d/ca.crt" \
+            && printf '%s' "$CERT" > "$d/client.crt" \
+            && printf '%s' "$KEY" > "$d/client.key")
+          export KUBECONFIG="$d/config"
+          kubectl config set-cluster k3s --server=https://127.0.0.1:6443 \
+            --certificate-authority="$d/ca.crt" --embed-certs=true
+          kubectl config set-credentials ci --client-certificate="$d/client.crt" \
+            --client-key="$d/client.key" --embed-certs=true
+          kubectl config set-context k3s --cluster=k3s --user=ci
+          kubectl config use-context k3s
+          kubectl -n system-upgrade create job \
+            --from=cronjob/alpine-os-trigger "alpine-os-manual-${GITHUB_RUN_ID}"
+          echo "SUC が1台ずつ更新を始めます。進捗: kubectl -n system-upgrade get jobs" \
+            >> "$GITHUB_STEP_SUMMARY"

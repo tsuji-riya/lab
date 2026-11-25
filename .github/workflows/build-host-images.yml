@@ -2,11 +2,19 @@ name: Build host images
 
 # ホスト層 (hosts/) 専用。既存の deploy / image-scan は paths が
 # terraform/fluxcd/infrastructure/apps に限定されており、hosts/** では発火しない。
-# 逆にこの workflow も hosts/** の変更でしか発火しない。
+#
+# PR では lint だけ。main へのマージ (image 定義の変更) で image を作り、
+# そのまま Release を発行する。承認は「マージ」に一本化しており、
+# 実行承認ゲートは置かない。image には設計上シークレットが入らないので
+# 暗号化せず、完全性は sha256 と build provenance で担保する。
 
 on:
   pull_request:
     paths: ["hosts/**", ".github/workflows/build-host-images.yml"]
+  push:
+    branches: [main]
+    paths: ["hosts/image/**", ".github/workflows/build-host-images.yml"]
+    tags: ["hosts-v*"]
   workflow_dispatch:
     inputs:
       alpine_version:
@@ -17,11 +25,9 @@ on:
         description: "lint だけ実行する (host-update-check が bot PR の必須チェックを通すのに使う)"
         type: boolean
         default: false
-  push:
-    tags: ["hosts-v*"]
 
-# 既定は読み取りのみ。書き込み権限は承認ゲート付きの build ジョブにだけ与える
-# (lint は版を固定していない pip パッケージを入れるので権限を持たせない)
+# 既定は読み取りのみ。書き込み権限は build ジョブにだけ与える
+# (lint は外部の pip パッケージを入れるので権限を持たせない)
 permissions:
   contents: read
 
@@ -40,7 +46,7 @@ jobs:
       - name: Scan for secrets (push protection の二重化)
         working-directory: hosts
         run: |
-          if grep -rInE "BEGIN [A-Z ]*PRIVATE KEY|K3S_TOKEN=[^\$<{]|token: [A-Za-z0-9+/=]{20,}|CF_TUNNEL_TOKEN='[A-Za-z0-9]" \
+          if grep -rInE "BEGIN [A-Z ]*PRIVATE KEY|K3S_TOKEN=[^\$<{]|token: [A-Za-z0-9+/=]{20,}|CF_TUNNEL_TOKEN='[A-Za-z0-9]|SSH_HOST_KEY_B64='[A-Za-z0-9]" \
                --exclude-dir=.git --exclude-dir=out . ; then
             echo "::error::秘密らしき文字列が混入しています。hosts/SECURITY.md を確認してください"
             exit 1
@@ -48,81 +54,54 @@ jobs:
           echo "secret pattern scan: clean"
       - name: Lint Ansible and shell
         run: |
-          pip install --quiet ansible-core ansible-lint yamllint
+          pip install --quiet "ansible-core==2.22.*" "ansible-lint==26.11.*" \
+            "yamllint==1.38.*"
           yamllint hosts/
-          ansible-lint hosts/ansible/ || true   # 導入初期は警告止まり、収束後に外す
+          ansible-galaxy collection install -r hosts/ansible/requirements.yml
+          (cd hosts/ansible && ansible-lint)
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
           shellcheck hosts/image/*.sh hosts/flash/*.sh \
             hosts/image/overlay/usr/local/sbin/node-firstboot \
             hosts/image/overlay/etc/init.d/* \
             hosts/image/overlay/etc/local.d/*.start
 
-  build-x86_64:
+  build:
     needs: lint
     if: github.event_name != 'pull_request' && !inputs.lint_only
-    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+            script: build-x86.sh
+          # ネイティブ arm runner (公開 repo は 4vCPU/16GB・無料無制限)
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            script: build-rpi.sh
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: write          # Release 作成
       id-token: write          # provenance attestation
       attestations: write
-    environment: image-release   # ← 実行承認ゲート (required reviewers + wait timer、公開 repo では無料)
-    defaults: { run: { working-directory: hosts } }
+    defaults: {run: {working-directory: hosts}}
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-      - name: Build x86_64 image
+      - name: Build ${{ matrix.arch }} image
         env:
           ALPINE_VERSION: ${{ inputs.alpine_version || '3.24.4' }}
-          # age の宛先公開鍵は repo に置かず Actions Secret から渡す。
-          # 書き換えは Settings → Secrets and variables → Actions で即時
-          AGE_RECIPIENT: ${{ secrets.AGE_RECIPIENT }}
-        run: ./image/build-x86.sh
+        run: ./image/${{ matrix.script }}
       - name: Attest provenance
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
         with:
           subject-path: hosts/out/*
+      # タグ push ならそのタグ、それ以外 (main へのマージ / 手動) は実行番号で
+      # Release を作る。両 arch のジョブが同じ Release に添付する
       - name: Publish release assets
-        if: startsWith(github.ref, 'refs/tags/')
         working-directory: ${{ github.workspace }}
-        env: { GH_TOKEN: "${{ github.token }}" }
-        run: |
-          gh release create "${GITHUB_REF_NAME}" --generate-notes --title "host images ${GITHUB_REF_NAME}" || true
-          gh release upload "${GITHUB_REF_NAME}" hosts/out/* --clobber
-      - name: Upload artifact (タグ無し実行時の受け渡し用)
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: host-image-x86_64
-          path: hosts/out/*
-
-  build-aarch64:
-    needs: lint
-    if: github.event_name != 'pull_request' && !inputs.lint_only
-    runs-on: ubuntu-24.04-arm   # ネイティブ arm runner (公開 repo は 4vCPU/16GB・無料無制限)
-    permissions:
-      contents: write
-      id-token: write
-      attestations: write
-    environment: image-release
-    defaults: { run: { working-directory: hosts } }
-    steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-      - name: Build Raspberry Pi image
         env:
-          ALPINE_VERSION: ${{ inputs.alpine_version || '3.24.4' }}
-          AGE_RECIPIENT: ${{ secrets.AGE_RECIPIENT }}
-        run: ./image/build-rpi.sh
-      - name: Attest provenance
-        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
-        with:
-          subject-path: hosts/out/*
-      - name: Publish release assets
-        if: startsWith(github.ref, 'refs/tags/')
-        working-directory: ${{ github.workspace }}
-        env: { GH_TOKEN: "${{ github.token }}" }
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || format('hosts-r{0}', github.run_number) }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" --generate-notes --title "host images ${GITHUB_REF_NAME}" || true
-          gh release upload "${GITHUB_REF_NAME}" hosts/out/* --clobber
-      - name: Upload artifact (タグ無し実行時の受け渡し用)
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: host-image-aarch64
-          path: hosts/out/*
+          gh release create "$TAG" --target "$GITHUB_SHA" --generate-notes \
+            --title "host images $TAG" 2>/dev/null || true
+          gh release upload "$TAG" hosts/out/* --clobber

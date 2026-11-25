@@ -1,32 +1,117 @@
 ---
-# k3s_node_mode: server_init | server_join | agent (未指定なら何もしない)
-# 版上げはここでは扱わない (creates で初回のみ)。稼働中の版は SUC の Plan が正本。
+# k3s の導入と join を自動判定で行う (bootstrap 専用の playbook は持たない)。
+# - 既に入っている台: 何もしない (版上げは SUC の Plan が担当)
+# - 新しい server: k3s が動いている server が居ればそこへ join、
+#   1台も居なければ inventory 先頭 (node1) だけが cluster-init する
+# - 新しい agent: 動いている server へ join (居なければ失敗し、次回再試行)
 #
-# token は引数でなく K3S_TOKEN 環境変数で渡す。引数だと install スクリプトが
-# /etc/init.d/k3s (誰でも読める) の command_args に平文で書き込む。
-# 環境変数なら /etc/rancher/k3s/k3s.env (0600) に入る
-- name: Build k3s install arguments
-  ansible.builtin.set_fact:
-    k3s_node_args: >-
-      {{ 'server --cluster-init'
-         if k3s_node_mode == 'server_init'
-         else ('server' if k3s_node_mode == 'server_join' else 'agent')
-              + ' --server https://' + k3s_api_host + ':' + (k3s_api_port | string) }}
-      --node-name {{ inventory_hostname }}
-      {{ '--node-label node.longhorn.io/create-default-disk=config'
-         if inventory_hostname in groups['agents'] else '' }}
-  when: k3s_node_mode is defined
+# token は Terraform 生成の固定値を K3S_TOKEN 環境変数で渡す。引数で渡すと
+# install スクリプトが /etc/init.d/k3s (誰でも読める) に平文で書き込む
 
-# node 名は inventory 名 (node1..7) に固定する。既定はホスト名 (FQDN) になり、
-# ops.yml の kubectl drain {{ inventory_hostname }} と食い違うため
-- name: Install k3s
-  ansible.builtin.shell: >
-    set -o pipefail &&
-    curl -sfL https://get.k3s.io |
-    INSTALL_K3S_VERSION={{ k3s_version }} sh -s - {{ k3s_node_args }}
-  args:
-    creates: /usr/local/bin/k3s
-    executable: /bin/bash
-  environment: "{{ {'K3S_TOKEN': k3s_token} if k3s_token is defined else {} }}"
-  no_log: true
-  when: k3s_node_mode is defined
+- name: Is k3s installed here
+  ansible.builtin.stat:
+    path: /usr/local/bin/k3s
+  register: k3s_node_bin
+
+- name: Find servers already running k3s
+  ansible.builtin.stat:
+    path: /var/lib/rancher/k3s/server/token
+  delegate_to: "{{ item }}"
+  loop: "{{ groups['servers'] | difference([inventory_hostname]) }}"
+  register: k3s_node_server_state
+  ignore_unreachable: true
+
+- name: Remember the running servers
+  ansible.builtin.set_fact:
+    k3s_node_members: >-
+      {{ k3s_node_server_state.results
+         | selectattr('stat', 'defined')
+         | selectattr('stat.exists')
+         | map(attribute='item') | list }}
+
+- name: Install k3s on a new node
+  when: not k3s_node_bin.stat.exists
+  block:
+    - name: Require the cluster token
+      ansible.builtin.assert:
+        that: k3s_token | length > 0
+        fail_msg: K3S_TOKEN が渡っていない (Terraform 生成値を環境変数で渡す)
+
+    - name: Require a running server to join (agents and node2/node3)
+      ansible.builtin.assert:
+        that: >-
+          k3s_node_members | length > 0
+          or inventory_hostname == groups['servers'][0]
+        fail_msg: join 先の server が無い。先頭の server が立つと次回の収束で入る
+
+    # 焼き直した台が同じ名前で戻ってくると、古い Node と node-password の
+    # 記録が残っていて join を拒否される。この台は k3s 未導入 (=新品) なので
+    # 古い記録は確実に不要
+    - name: Forget a previous incarnation of this node
+      ansible.builtin.shell: |
+        set -eu
+        k3s kubectl delete node {{ inventory_hostname }} --ignore-not-found
+        k3s kubectl -n kube-system delete secret \
+          {{ inventory_hostname }}.node-password.k3s --ignore-not-found
+      delegate_to: "{{ k3s_node_members[0] }}"
+      when: k3s_node_members | length > 0
+      register: k3s_node_forget
+      changed_when: "'deleted' in k3s_node_forget.stdout"
+
+    # node 名は inventory 名に固定する。既定はホスト名 (FQDN) になり、
+    # SUC や kubectl での指定と食い違う
+    - name: Build k3s install arguments
+      ansible.builtin.set_fact:
+        k3s_node_args: >-
+          {{ ('server' if inventory_hostname in groups['servers']
+              else 'agent')
+             + (' --server https://' + node_ips[k3s_node_members[0]] + ':'
+                + (k3s_api_port | string)
+                if k3s_node_members | length > 0 else ' --cluster-init') }}
+          --node-name {{ inventory_hostname }}
+          {{ '--node-label node.longhorn.io/create-default-disk=config'
+             if inventory_hostname in groups['agents'] else '' }}
+
+    - name: Install k3s
+      ansible.builtin.shell: >
+        set -o pipefail &&
+        curl -sfL https://get.k3s.io |
+        INSTALL_K3S_VERSION={{ k3s_version }} sh -s - {{ k3s_node_args }}
+      args:
+        creates: /usr/local/bin/k3s
+        executable: /bin/bash
+      environment:
+        K3S_TOKEN: "{{ k3s_token }}"
+      no_log: true
+
+# Longhorn は create-default-disk=config ラベルの台にだけ、この注釈どおりの
+# 既定ディスクを作る (createDefaultDiskLabeledNodes)。毎回の収束で揃える
+- name: Longhorn default disk annotation (agents)
+  when:
+    - inventory_hostname in groups['agents']
+    - k3s_node_members | length > 0
+  vars:
+    disks_jsonpath: >-
+      jsonpath={.metadata.annotations.node\.longhorn\.io/default-disks-config}
+    disks_config: >-
+      {{ [{'path': '/var/lib/longhorn', 'allowScheduling': true,
+           'tags': longhorn_disk_tags}] | to_json }}
+  block:
+    - name: Wait until the node is registered
+      ansible.builtin.command: >-
+        k3s kubectl get node {{ inventory_hostname }}
+        -o {{ disks_jsonpath | quote }}
+      delegate_to: "{{ k3s_node_members[0] }}"
+      register: k3s_node_disk_annotation
+      until: k3s_node_disk_annotation.rc == 0
+      retries: 30
+      delay: 10
+      changed_when: false
+
+    - name: Annotate the Longhorn default disk
+      ansible.builtin.command: >-
+        k3s kubectl annotate node {{ inventory_hostname }} --overwrite
+        node.longhorn.io/default-disks-config={{ disks_config | quote }}
+      delegate_to: "{{ k3s_node_members[0] }}"
+      when: k3s_node_disk_annotation.stdout != disks_config
+      changed_when: true

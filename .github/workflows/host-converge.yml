@@ -1,0 +1,79 @@
+name: Host converge
+
+# ホスト層の push 型 GitOps。hosts/ansible の site.yml を全ノードへ流し、
+# 定義どおりに収束させる (初回構築の k3s 導入・join もここで行う)。
+#
+# 承認は「main へのマージ」に一本化している。Environment hosts は reviewer を
+# 置かず、main 以外のブランチからは使えない (Terraform: terraform/hosts.tf)。
+# シークレットと known_hosts は Terraform が生成して登録するので、人が値を
+# 扱う作業は無い。
+#
+# 経路: GitHub-hosted runner → Cloudflare Access (サービストークン)
+#       → ノード別トンネル → sshd。ホスト鍵は Terraform 生成値で厳密に検証する。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - hosts/ansible/**
+      - hosts/image/overlay/**
+      - .github/workflows/host-converge.yml
+  schedule:
+    # 6時間ごと: ドリフトの是正と、焼いて電源を入れた新しい台の取り込み
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "対象 (Ansible の --limit。例: node7, agents)"
+        required: true
+        default: all
+
+permissions:
+  contents: read
+
+concurrency:
+  group: host-converge
+  cancel-in-progress: false
+
+jobs:
+  converge:
+    runs-on: ubuntu-24.04
+    environment: hosts
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: Install cloudflared (版と sha256 を固定)
+        env:
+          CF_VERSION: "2026.11.2"
+          CF_SHA256: 56f13335143ec0e22772963290683a84a04114a35ec64cbc794a4d39ff9bb8cf
+        run: |
+          base=https://github.com/cloudflare/cloudflared/releases/download
+          curl -fsSL "$base/${CF_VERSION}/cloudflared-linux-amd64" \
+            -o /tmp/cloudflared
+          echo "${CF_SHA256}  /tmp/cloudflared" | sha256sum -c
+          sudo install -m 755 /tmp/cloudflared /usr/local/bin/cloudflared
+      - name: Install Ansible (版を固定)
+        run: |
+          pip install --quiet "ansible-core==2.22.*"
+          ansible-galaxy collection install -r hosts/ansible/requirements.yml
+      - name: Prepare SSH key and known_hosts
+        env:
+          HOSTS_SSH_KEY: ${{ secrets.HOSTS_SSH_KEY }}
+          HOSTS_KNOWN_HOSTS: ${{ vars.HOSTS_KNOWN_HOSTS }}
+        run: |
+          : "${HOSTS_SSH_KEY:?Terraform が Environment hosts に登録していない}"
+          : "${HOSTS_KNOWN_HOSTS:?Terraform が Environment hosts に登録していない}"
+          install -d -m 700 ~/.ssh
+          (umask 077 && printf '%s\n' "$HOSTS_SSH_KEY" > ~/.ssh/lab_ci)
+          printf '%s\n' "$HOSTS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: Converge
+        working-directory: hosts/ansible
+        env:
+          LIMIT: ${{ inputs.limit || 'all' }}
+          K3S_TOKEN: ${{ secrets.K3S_TOKEN }}
+          TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.HOSTS_CF_ACCESS_CLIENT_ID }}
+          TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.HOSTS_CF_ACCESS_CLIENT_SECRET }}
+          ANSIBLE_FORCE_COLOR: "1"
+        run: |
+          ansible-playbook site.yml -i inventory/cloudflare.yml \
+            --limit "${LIMIT}" --diff

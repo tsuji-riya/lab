@@ -102,6 +102,7 @@ echo "root=LABEL=root modules=sd-mod,usb-storage,ext4 quiet rootfstype=ext4 usb-
   | sudo tee mnt-boot/cmdline.txt >/dev/null
 
 cleanup; trap - EXIT
+# 暗号化しない理由は build-x86.sh と同じ
 zstd -19 -T0 "$IMG" -o "$IMG.zst" && rm "$IMG"
-./image/encrypt-image.sh "$IMG.zst"
-echo "OK: $IMG.zst.age"
+(cd out && sha256sum "$(basename "$IMG.zst")" > "$(basename "$IMG.zst").sha256")
+echo "OK: $IMG.zst"

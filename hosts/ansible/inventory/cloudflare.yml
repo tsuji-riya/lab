@@ -3,8 +3,8 @@
 # ホスト名は Zero Trust 側で各ノードのトンネルに割り当てた公開ホスト名。
 # 認証は cloudflared access が TUNNEL_SERVICE_TOKEN_ID/SECRET を使う。
 # ホスト鍵は検証する (runner は毎回まっさらなので accept-new では検証にならない)。
-# known_hosts は host-ops workflow が Environment シークレット
-# HOST_OPS_KNOWN_HOSTS から ~/.ssh/known_hosts に書く (作り方は runbook)。
+# known_hosts は host-converge workflow が Environment 変数 HOSTS_KNOWN_HOSTS
+# (Terraform が生成・登録) から ~/.ssh/known_hosts に書く。
 all:
   vars:
     ansible_private_key_file: ~/.ssh/lab_ci

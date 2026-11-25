@@ -2,18 +2,18 @@
 # nftables の反映は handler の nft -f だけで行う。サービスの restart / reload は
 # Alpine の init スクリプトが flush ruleset を伴い、kube-proxy / flannel の
 # ルールまで消して通信断になるため使わない (base ファイルは自テーブルだけ作り直す)
-- name: nftables.d exists
+- name: Nftables.d exists
   ansible.builtin.file:
     path: /etc/nftables.d
     state: directory
     mode: "0755"
-- name: nftables base (image と同じ内容を正本として再配布)
+- name: Nftables base (image と同じ内容を正本として再配布)
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../image/overlay/etc/nftables.nft"
     dest: /etc/nftables.nft
     mode: "0644"
   notify: Apply nftables
-- name: k3s ports fragment
+- name: K3s ports fragment
   ansible.builtin.copy:
     dest: /etc/nftables.d/20-k3s.nft
     mode: "0644"
@@ -28,7 +28,7 @@
         }
       }
   notify: Apply nftables
-- name: nftables enabled at boot
+- name: Nftables enabled at boot
   ansible.builtin.service:
     name: nftables
     enabled: true
