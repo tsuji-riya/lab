@@ -20,6 +20,7 @@ jobs:
   trigger:
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       - name: Install cloudflared and kubectl (版と sha256 を固定)
         env:
           CF_VERSION: "2026.11.2"
@@ -41,15 +42,7 @@ jobs:
         env:
           TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-        run: |
-          nohup cloudflared access tcp --hostname lab-k3s-api.riya.work \
-            --url 127.0.0.1:6443 > /tmp/cloudflared.log 2>&1 &
-          for _ in $(seq 1 20); do
-            (echo > /dev/tcp/127.0.0.1/6443) 2>/dev/null && exit 0
-            sleep 1
-          done
-          cat /tmp/cloudflared.log
-          exit 1
+        run: ./.github/scripts/k3s-api-tunnel.sh
       - name: Start the alpine-os Plan once
         env:
           CA: ${{ secrets.K8S_CLUSTER_CA_CERTIFICATE }}

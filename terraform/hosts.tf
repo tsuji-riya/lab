@@ -7,6 +7,8 @@
 
 locals {
   host_nodes = module.cloudflare.host_nodes
+  # k3s API のトンネル (k3s-api.riya.work) のコネクタを張る台
+  k3s_api_nodes = toset(["node1", "node2", "node3"])
 }
 
 # ノードの SSH ホスト鍵。台が焼き直されても同じ鍵になるので、
@@ -50,18 +52,27 @@ resource "github_repository_environment_deployment_policy" "hosts_main" {
 
 locals {
   hosts_env_secret_values = {
-    HOSTS_SSH_KEY                 = tls_private_key.hosts_ci.private_key_openssh
-    K3S_TOKEN                     = random_password.k3s_token.result
-    HOSTS_CF_ACCESS_CLIENT_ID     = module.cloudflare.host_ops_service_token_client_id
-    HOSTS_CF_ACCESS_CLIENT_SECRET = module.cloudflare.host_ops_service_token_client_secret
+    HOSTS_SSH_KEY = tls_private_key.hosts_ci.private_key_openssh
+    K3S_TOKEN     = random_password.k3s_token.result
   }
   # for_each には秘密でないキーの集合だけを渡す (値は sensitive なので)
-  hosts_env_secret_names = toset([
-    "HOSTS_SSH_KEY",
-    "K3S_TOKEN",
-    "HOSTS_CF_ACCESS_CLIENT_ID",
-    "HOSTS_CF_ACCESS_CLIENT_SECRET",
-  ])
+  hosts_env_secret_names = toset(["HOSTS_SSH_KEY", "K3S_TOKEN"])
+
+  # Cloudflare Access のサービストークン。deploy / Host converge /
+  # Host OS update が共通で使う repo シークレット。以前は fetch-tokens.sh が
+  # 人の手で書いており、Terraform 管理外の API 経路と食い違って deploy を壊した
+  # (2026-11-24)。生成元の Terraform が直接書けば食い違いようがない
+  cf_access_secret_values = {
+    CF_ACCESS_CLIENT_ID     = module.cloudflare.host_ops_service_token_client_id
+    CF_ACCESS_CLIENT_SECRET = module.cloudflare.host_ops_service_token_client_secret
+  }
+}
+
+resource "github_actions_secret" "cf_access" {
+  for_each    = toset(["CF_ACCESS_CLIENT_ID", "CF_ACCESS_CLIENT_SECRET"])
+  repository  = "lab"
+  secret_name = each.key
+  value       = local.cf_access_secret_values[each.key]
 }
 
 resource "github_actions_environment_secret" "hosts" {
@@ -92,6 +103,8 @@ output "host_identity" {
       host_key      = tls_private_key.host_ssh[n].private_key_openssh
       host_pubkey   = trimspace(tls_private_key.host_ssh[n].public_key_openssh)
       ci_ssh_pubkey = trimspace(tls_private_key.hosts_ci.public_key_openssh)
+      # server だけが k3s API のトンネルのコネクタを張る (agent は空)
+      api_tunnel_token = contains(local.k3s_api_nodes, n) ? module.cloudflare.k3s_api_tunnel_token : ""
     }
   }
 }

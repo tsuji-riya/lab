@@ -14,7 +14,7 @@ done
 [ -n "$CONF" ] || { echo "node.conf not found, skipping"; exit 0; }
 
 # NODE_HOSTNAME= / NODE_IP= / NODE_GATEWAY= / NODE_DNS= / NODE_ROLE=
-# SSH_PUBKEY= / SSH_PUBKEY_CI= / SSH_HOST_KEY_B64= / CF_TUNNEL_TOKEN=
+# SSH_PUBKEY= / SSH_PUBKEY_CI= / SSH_HOST_KEY_B64= / CF_TUNNEL_TOKEN= / CF_API_TUNNEL_TOKEN=
 # shellcheck source=/dev/null
 . "$CONF"
 GATEWAY="${NODE_GATEWAY:-192.168.1.1}"
@@ -70,14 +70,15 @@ growpart "/dev/$DISK" "$PARTNO" || rc=$?
 [ "$rc" -le 1 ] || { echo "growpart failed ($rc)" >&2; exit 1; }
 resize2fs "$ROOT_DEV"
 
-# Cloudflare Tunnel (GitHub Actions からの SSH 到達用)。トークンは
-# node.conf 経由で焼き込み時にだけ渡し、ファイルに置いてサービス起動
-if [ -n "${CF_TUNNEL_TOKEN:-}" ]; then
-  install -d -m 700 /etc/cloudflared
-  printf '%s' "$CF_TUNNEL_TOKEN" > /etc/cloudflared/token
-  chmod 600 /etc/cloudflared/token
-  rc-service cf-tunnel start || true
-fi
+# Cloudflare Tunnel。トークンは node.conf 経由で焼き込み時にだけ渡す。
+# CF_TUNNEL_TOKEN: 台ごとの SSH 用 (全台) / CF_API_TUNNEL_TOKEN: k3s API 用 (server のみ)
+install -d -m 700 /etc/cloudflared
+for pair in "cf-tunnel:${CF_TUNNEL_TOKEN:-}" "cf-tunnel.api:${CF_API_TUNNEL_TOKEN:-}"; do
+  svc=${pair%%:*} token=${pair#*:}
+  [ -n "$token" ] || continue
+  (umask 077 && printf '%s' "$token" > "/etc/cloudflared/${svc}.token")
+  rc-service "$svc" start || true
+done
 
 date -u +%FT%TZ > "$MARKER"
 # node.conf はトンネル token を含み、FAT 上で誰でも読める。適用後は消す

@@ -12,11 +12,19 @@
    `TF_GITHUB_TOKEN` に登録する
 2. この PR をマージすると deploy workflow の terraform apply が
    - Environment `hosts` (main からのみ使用可、reviewer なし) を作り
-   - `HOSTS_SSH_KEY` / `K3S_TOKEN` / `HOSTS_CF_ACCESS_CLIENT_*` と
-     変数 `HOSTS_KNOWN_HOSTS` を書く
+   - `HOSTS_SSH_KEY` / `K3S_TOKEN` と変数 `HOSTS_KNOWN_HOSTS` を書く
+   - repo シークレット `CF_ACCESS_CLIENT_ID` / `_SECRET` を Terraform 生成の
+     サービストークンで書く (人は触らない。以前は fetch-tokens.sh が書いて
+     いたが、Terraform 管理外の API 経路と食い違って deploy を壊した)
+   - k3s API の新経路 `k3s-api.riya.work` (トンネル・DNS・Access) を作る。
+     コネクタは server を新 image で焼いたときに入る。それまで CI は旧経路
+     `lab-k3s-api.riya.work` にフォールバックする
 3. Settings → Actions → General の "Allow GitHub Actions to create and
    approve pull requests" を有効にする (host-update-check の bot PR 用)
-4. 旧方式の残骸を消す: Environment `host-ops` と `image-release`、
+4. 全台を新 image で焼き直したら、旧 API 経路 (`lab-k3s-api.riya.work` の
+   Access アプリ・DNS・トンネルと node1 の手動 cloudflared) を Zero Trust の
+   画面から消す (どこにもコード化されていないため)
+5. 旧方式の残骸を消す: Environment `host-ops` と `image-release`、
    シークレット `AGE_RECIPIENT` / `LAB_ADMIN_SSH_KEY` / `KUBECONFIG_B64`、
    Mac の `~/.config/lab-hosts-age.txt` と `~/.config/lab-hosts-cf/`
 

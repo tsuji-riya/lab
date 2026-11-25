@@ -71,8 +71,8 @@ jobs:
         env:
           LIMIT: ${{ inputs.limit || 'all' }}
           K3S_TOKEN: ${{ secrets.K3S_TOKEN }}
-          TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.HOSTS_CF_ACCESS_CLIENT_ID }}
-          TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.HOSTS_CF_ACCESS_CLIENT_SECRET }}
+          TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           ANSIBLE_FORCE_COLOR: "1"
         run: |
           ansible-playbook site.yml -i inventory/cloudflare.yml \

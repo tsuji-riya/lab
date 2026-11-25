@@ -9,7 +9,7 @@
 #
 # 出力 (~/.config/lab-hosts/、本人だけが読める):
 #   nodeN.env    flash.sh が node.conf に追記する秘密 (トンネル token、
-#                SSH ホスト鍵、CI 用公開鍵)
+#                SSH ホスト鍵、CI 用公開鍵、server は k3s API のトンネル token)
 #   known_hosts  LAN の IP で引けるホスト公開鍵 (inventory/hosts.yml と
 #                install-mini-pc.sh が検証に使う。焼き直しても不変)
 #   k3s.env      LAN から ansible-playbook を流すときの K3S_TOKEN
@@ -56,11 +56,14 @@ known = []
 for node, v in sorted(ids.items()):
     host_key = base64.b64encode(v["host_key"].encode()).decode()
     tt, ci, pub = v["tunnel_token"], v["ci_ssh_pubkey"], v["host_pubkey"]
+    api = v["api_tunnel_token"]
     # repr は値を単引用符で囲む (値に引用符は含まれない) ので sh で source できる
-    write(f"{node}.env",
-          f"CF_TUNNEL_TOKEN={tt!r}\n"
-          f"SSH_HOST_KEY_B64={host_key!r}\n"
-          f"SSH_PUBKEY_CI={ci!r}\n")
+    env = (f"CF_TUNNEL_TOKEN={tt!r}\n"
+           f"SSH_HOST_KEY_B64={host_key!r}\n"
+           f"SSH_PUBKEY_CI={ci!r}\n")
+    if api:  # k3s API のトンネルは server だけ
+        env += f"CF_API_TUNNEL_TOKEN={api!r}\n"
+    write(f"{node}.env", env)
     known.append(f"{ips[node]} {pub}")
 write("known_hosts", "\n".join(known) + "\n")
 '

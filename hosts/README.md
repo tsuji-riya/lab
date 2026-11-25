@@ -111,7 +111,8 @@ cd hosts/ansible && ansible-playbook site.yml --limit node7
 | CI の SSH 鍵 | `tls_private_key` | `HOSTS_SSH_KEY` (同上) | 公開鍵を node.conf で配る |
 | ノードの SSH ホスト鍵 | `tls_private_key` (台ごと) | 公開鍵を変数 `HOSTS_KNOWN_HOSTS` に | 秘密鍵を node.conf で配る (焼き直しても不変) |
 | Cloudflare トンネル token | Cloudflare provider | ― | node.conf で配る |
-| Access サービストークン | Cloudflare provider | `HOSTS_CF_ACCESS_CLIENT_*` (Terraform が書く) | ― |
+| Access サービストークン | Cloudflare provider | repo シークレット `CF_ACCESS_CLIENT_*` (Terraform が書く。deploy と共用) | ― |
+| k3s API トンネル token | Cloudflare provider | ― | node.conf で server (node1-3) にだけ配る |
 
 - 人が1度だけやること: Terraform が GitHub に書くための fine-grained PAT
   (この repo のみ、Administration / Secrets / Variables: Read and write) を作り、
@@ -137,7 +138,10 @@ overlay と Ansible base ロールに取り込み済み。
   `cgroup_enable=cpuset cgroup_enable=memory cgroup_memory=1`
   (ファームウェア既定の cgroup_disable=memory を後勝ちで打ち消す)
 - fstab の tmpfs 2件 (/tmp 256m、/var/log 64m)
-- 台固有: node1 のみ cloudflared 常駐。実測で見えた /var/lib/longhorn-hdd
+- 台固有: node1 のみ cloudflared 常駐 (CI から k3s API への旧経路
+  `lab-k3s-api.riya.work` と推定。Terraform 管理外)。新しい image では
+  server 3台が Terraform 管理の `k3s-api.riya.work` のコネクタ
+  (`cf-tunnel.api` サービス) を張るので、どの1台が落ちても CI は API に届く。実測で見えた /var/lib/longhorn-hdd
   マウントは、対象 HDD が既に撤去済みのため取り込まなかった
   (2026-11-25 本人申告。台固有マウントの仕組みだけ base ロールに残してある)
 
