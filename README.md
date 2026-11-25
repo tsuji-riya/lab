@@ -1,287 +1,202 @@
 # 🐱 lab
 
-おうちの k3s クラスタを GitOps で管理するリポジトリです 🐾
-Terraform と Flux でほぼすべてをコード化していて、`main` に push すると自動で反映されます。
+おうちの k3s クラスタを **ベアメタルから全部コード** で管理するリポジトリ。
 
----
-
-## 🖥️ ノード構成
-
-| ノード | ハードウェア | ストレージ |
+| 層 | 道具 | 反映のしかた |
 | --- | --- | --- |
-| node1 | ミニ PC | - |
-| node2 | ミニ PC | - |
-| node3 | ミニ PC | - |
-| node4 | Raspberry Pi 🍓 | USB SATA SSD ⚡ |
-| node5 | Raspberry Pi 🍓 | USB SATA SSD ⚡ |
-| node6 | Raspberry Pi 🍓 | USB SATA SSD ⚡ |
-| node7 | Raspberry Pi 🍓 | USB SATA SSD ⚡ |
+| 🧱 **ホスト** (`hosts/`) | Alpine image + Ansible | image を焼く / `Host ops` を手動実行 |
+| ☁️ **外周** (`terraform/`) | Terraform → Cloudflare / k8s | `main` に merge で CI が apply |
+| 🌀 **クラスタ** (`fluxcd/` `infrastructure/` `apps/`) | Flux CD | `main` に merge で Flux が同期 |
 
-- Longhorn のディスクは `ssd` タグ(Raspberry Pi の USB SSD)を使います。
+> [!NOTE]
+> `hosts/**` はクラスタには一切デプロイされません。ホスト層の詳細は [hosts/README.md](hosts/README.md) へ。
 
 ---
 
-## 🗺️ 全体構成図
+## 🖥️ ノード
+
+| ノード | IP | ロール | ハード | Arch |
+| --- | --- | --- | --- | --- |
+| node1 | `192.168.1.10` | server | ミニ PC | x86_64 |
+| node2 | `192.168.1.11` | server | ミニ PC | x86_64 |
+| node3 | `192.168.1.12` | server | ミニ PC | x86_64 |
+| node4 | `192.168.1.13` | agent | 🍓 Raspberry Pi + USB SSD | aarch64 |
+| node5 | `192.168.1.14` | agent | 🍓 Raspberry Pi + USB SSD | aarch64 |
+| node6 | `192.168.1.15` | agent | 🍓 Raspberry Pi + USB SSD | aarch64 |
+| node7 | `192.168.1.16` | agent | 🍓 Raspberry Pi + USB SSD | aarch64 |
+
+OS は全台 **Alpine 3.24**、k3s は **v1.37.2+k3s1**（`hosts/ansible/group_vars/all.yml` でピン）。
+
+---
+
+## 🗺️ 全体像
 
 ```mermaid
-flowchart TB
-    user(["👩‍💻 Riya"])
+flowchart LR
+    me(["👩‍💻 Riya"])
 
     subgraph GH["GitHub"]
-        repo[("📦 tsuji-riya/lab")]
-        actions["⚙️ GitHub Actions<br/>terraform workflow"]
+        repo[("tsuji-riya/lab")]
+        ci["⚙️ Actions"]
     end
 
     subgraph CF["☁️ Cloudflare"]
-        r2[("🪣 R2<br/>tfstate")]
-        dns["DNS<br/>longhorn / headlamp / logs"]
-        access["🛡️ Zero Trust Access<br/>owner-only"]
-        tunnel{{"🚇 Tunnel: k3s"}}
+        access["🛡️ Access"]
+        tk3s{{"Tunnel: k3s"}}
+        thost{{"Tunnel: host-node1..7"}}
+        r2[("R2: tfstate")]
     end
 
-    subgraph K3S["🏠 k3s クラスタ"]
-        direction TB
-        api["k3s API :6443"]
-
-        subgraph NODES["ノード"]
-            direction LR
-            mini["🖥️ node1-3<br/>ミニ PC"]
-            pi["🍓 node4-7<br/>Raspberry Pi<br/>USB SSD"]
+    subgraph HOME["🏠 おうち"]
+        subgraph K3S["k3s"]
+            flux["🌀 Flux"]
+            cfd["cloudflared ×2"]
+            svc["Longhorn / Headlamp<br/>VictoriaLogs / anubis / fantasy"]
         end
-
-        subgraph FLUX["🌀 flux-system"]
-            gitrepo["GitRepository"]
-            ks_infra["Kustomization<br/>infrastructure"]
-            ks_pg["Kustomization<br/>postgres"]
-            ks_apps["Kustomization<br/>apps"]
-        end
-
-        subgraph NS_CF["ns: cloudflare"]
-            cfd["cloudflared x2"]
-        end
-
-        subgraph NS_LH["ns: longhorn-system"]
-            lh["🐮 Longhorn"]
-            sc_ssd["StorageClass<br/>longhorn-ssd-single"]
-        end
-
-        subgraph NS_CNPG["ns: cnpg-system"]
-            cnpg["CloudNativePG<br/>operator"]
-        end
-
-        subgraph NS_PG["ns: postgres"]
-            pgp[("🐘 postgres-1<br/>primary")]
-            pgs[("🐘 postgres-2<br/>standby")]
-        end
-
-        subgraph NS_HL["ns: headlamp"]
-            headlamp["🔦 Headlamp"]
-        end
-
-        subgraph NS_VL["ns: victoria-logs"]
-            vlogs[("📜 VictoriaLogs")]
-            vector["Vector<br/>DaemonSet (全ノード)"]
-        end
+        hosts["🖥️ node1-7<br/>sshd"]
     end
 
-    user -- "git push" --> repo
-    repo -- "PR / push" --> actions
-    actions -- "tfstate" --> r2
-    actions -- "terraform apply<br/>(cloudflared access tcp)" --> api
-    actions -- "Cloudflare API" --> CF
-
-    gitrepo -. "pull (24h)" .-> repo
-    gitrepo --> ks_infra --> ks_pg --> ks_apps
-
-    ks_infra --> lh
-    ks_infra --> cnpg
-    ks_infra --> cfd
-    ks_pg --> pgp
-    ks_apps --> headlamp
-    ks_apps --> vlogs
-    vector -- "Pod ログ / dmesg / k3s.log" --> vlogs
-
-    cnpg -- "管理" --> pgp
-    pgp == "非同期レプリケーション" ==> pgs
-    pgp --- sc_ssd
-    pgs --- sc_ssd
-    sc_ssd -- "ssd タグ" --- pi
-    sc_ssd --- lh
-
-    user -- "longhorn.riya.work" --> access
-    user -- "headlamp.riya.work" --> access
-    user -- "logs.riya.work" --> access
-    access --> dns
-    dns --> tunnel
-    tunnel == "outbound 接続" ==> cfd
-    cfd -- ":80" --> lh
-    cfd -- ":80" --> headlamp
-    cfd -- ":9428" --> vlogs
-    headlamp -- "k8s API" --> api
+    me -- push / merge --> repo --> ci
+    ci -- terraform --> CF
+    ci -- state --> r2
+    ci -- Host ops (SSH) --> access --> thost --> hosts
+    flux -. pull .-> repo
+    flux --> svc
+    me -- "*.riya.work" --> access --> tk3s ==> cfd --> svc
 ```
 
 ---
 
-## 🧩 構成要素
+## 🌀 クラスタ (Flux)
 
-| レイヤー | 使っているもの | 役割 |
-| --- | --- | --- |
-| IaC | Terraform (`>= 1.9`) | Cloudflare・Namespace・Secret を管理 |
-| tfstate | Cloudflare R2 (S3 互換) | Terraform の state 置き場 |
-| GitOps | Flux CD | リポジトリの内容をクラスタへ同期 |
-| Kubernetes | k3s | クラスタ本体 (ミニ PC 3 台 + Raspberry Pi 4 台) |
-| ストレージ | Longhorn `1.13.0` | SSD の分散ブロックストレージ |
-| データベース | CloudNativePG `0.29.1` | 共有 PostgreSQL クラスタ |
-| 公開経路 | Cloudflare Tunnel (`cloudflared` x2) | ポート開放なしで外部公開 |
-| 認証 | Cloudflare Access | Longhorn UI / Headlamp / VictoriaLogs を自分だけに制限 |
-| アプリ | Headlamp (chart `0.46.0`) | Kubernetes の Web UI |
-| アプリ | VictoriaLogs (chart `0.13.12`) + Vector | ログの収集と Web UI |
-| アプリ | Anubis `v1.28.2` + nginx ([tsuji-riya/anubis.riya.work](https://github.com/tsuji-riya/anubis.riya.work) のイメージ) | Anubis のチェッカーを通ると、Anubis ちゃんを無限に出し続ける静的サイト |
-| アプリ | fantasy ([tsuji-riya/fantasy.riya.work](https://github.com/tsuji-riya/fantasy.riya.work) のイメージ) | Fantasy Zone をブラウザで遊ぶ静的サイト。ROM は利用者が手元から読み込む |
+```mermaid
+flowchart LR
+    infra["infrastructure<br/>Longhorn · CNPG · cloudflared · SUC"]
+    pg["postgres<br/>CNPG Cluster"]
+    apps["apps<br/>Headlamp · VictoriaLogs · anubis · fantasy"]
+    up["k3s-upgrade<br/>k3s / Alpine の Plan"]
+    infra --> pg --> apps
+    infra --> apps
+    infra --> up
+```
 
----
-
-## 🌐 公開しているサービス
-
-| ホスト名 | 転送先 | アクセス制限 |
-| --- | --- | --- |
-| `longhorn.riya.work` | `longhorn-frontend.longhorn-system:80` | Cloudflare Access (`owner-only`) |
-| `headlamp.riya.work` | `headlamp.headlamp:80` | Cloudflare Access (`owner-only`)。ログイン不要の閲覧専用 (Secret は見えない) |
-| `logs.riya.work` | `victoria-logs-victoria-logs-single-server.victoria-logs:9428` | Cloudflare Access (`owner-only`) |
-| `anubis.riya.work` | `anubis.anubis:80` | なし (公開)。開くたびに Anubis のチェッカーが出る |
-| `fantasy.riya.work` | `fantasy.fantasy:80` | なし (公開)。ROM はサーバーに置かない |
-| `lab-k3s-api.riya.work` | k3s API `:6443` | CI が Access のサービストークン経由で利用 |
-
----
-
-## 💾 ストレージ
-
-| StorageClass | ディスク | レプリカ | 用途 |
+| 種類 | コンポーネント | バージョン | メモ |
 | --- | --- | --- | --- |
-| `longhorn-ssd-single` ⚡ | `ssd` (Raspberry Pi の USB SSD) | 1 (`strict-local`) | PostgreSQL。レプリケーションは CNPG 側で行う |
+| 💾 ストレージ | Longhorn | chart `1.13.0` | `ssd` タグのディスクのみ使用 |
+| 🐘 DB | CloudNativePG | chart `0.29.1` | 共有 PostgreSQL (primary + standby) |
+| 🚇 公開経路 | cloudflared | `2026.11.2` | ×2、ポート開放なし |
+| 🔁 自動更新 | system-upgrade-controller | `v0.21.1` | k3s は stable 追従、Alpine は週次 (日曜 3:00) |
+| 🔦 UI | Headlamp | chart `0.46.0` | 閲覧専用 |
+| 📜 ログ | VictoriaLogs + Vector | chart `0.13.12` | 全ノードのログを収集 |
+| 🎮 サイト | anubis | Anubis `v1.28.2` | Anubis ちゃんが無限に出る ([repo](https://github.com/tsuji-riya/anubis.riya.work)) |
+| 🎮 サイト | fantasy | `1.0.18` | ブラウザで Fantasy Zone、ROM は手元から ([repo](https://github.com/tsuji-riya/fantasy.riya.work)) |
 
-Longhorn のデフォルトディスクは `ssd` のものだけに絞っています。
+### 💾 StorageClass
+
+| 名前 | ディスク | レプリカ | 用途 |
+| --- | --- | --- | --- |
+| `longhorn-ssd-single` | Pi の USB SSD (`ssd`) | 1 (`strict-local`) | PostgreSQL。冗長化は CNPG 側 |
+
+### 🐘 PostgreSQL
+
+- `postgres` ns に 2 台、非同期レプリケーション。Anti-Affinity で別ノード・`etcd` ロールに配置
+- `wal_compression` + `checkpoint_timeout: 15min` で WAL を抑制
+- アプリ用のロール / DB は `infrastructure/postgres/` に追加（今はまだなし）
 
 ---
 
-## 🐘 PostgreSQL (共有クラスタ)
+## 🌐 公開ホスト
 
-- `postgres` namespace にプライマリとスタンバイの 2 台を置き、非同期レプリケーションします
-- Pod Anti-Affinity で別ノードに分散し、`etcd` ロールのノードに配置します
-- `wal_compression` と `checkpoint_timeout: 15min` で WAL の量を抑えます
-- アプリごとのロールと DB は `infrastructure/postgres/` に追加します (今はまだありません)
+| ホスト | 行き先 | 制限 |
+| --- | --- | --- |
+| `longhorn.riya.work` | Longhorn UI | 🔒 Access `owner-only` |
+| `headlamp.riya.work` | Headlamp | 🔒 Access `owner-only` |
+| `logs.riya.work` | VictoriaLogs | 🔒 Access `owner-only` |
+| `anubis.riya.work` | anubis | 🌍 公開 |
+| `fantasy.riya.work` | fantasy | 🌍 公開 |
+| `lab-k3s-api.riya.work` | k3s API `:6443` | 🤖 CI (サービストークン) |
+| `ssh-node{1..7}.riya.work` | 各ノードの sshd | 🤖 CI (`host-ops-ci`) / 🔒 `owner-only` |
+
+---
+
+## 🧱 ホスト層 (`hosts/`)
+
+```mermaid
+flowchart LR
+    a["PR merge"] --> b["Build host images<br/>x86_64 / aarch64"]
+    b --> c["Release<br/>.img.zst.age + sha256"]
+    c --> d["flash.sh<br/>(Mac で焼く + identity 注入)"]
+    d --> e["first-boot<br/>hostname / IP / rootfs 拡張"]
+    e --> f["Ansible<br/>k3s server×3 → agent×4"]
+```
+
+| ディレクトリ | 中身 |
+| --- | --- |
+| `image/` | image ビルド (world / overlay / nftables 既定拒否 / 鍵のみ sshd) |
+| `flash/` | 書き込みとノード固有値 (`nodes.conf`) の注入 |
+| `ansible/` | `site.yml` (収束) · `bootstrap-cluster.yml` (初回) · `ops.yml` (day-2) |
+| `docs/` | runbook |
+
+> [!IMPORTANT]
+> image は age 暗号化して Release に置きます。秘密鍵は Mac の `~/.config/lab-hosts-age.txt` だけ。失うと過去の image は復号できません。
+
+---
+
+## ⚙️ GitHub Actions
+
+| Workflow | トリガー | やること |
+| --- | --- | --- |
+| `deploy` | PR / `main` push | `terraform plan` → `apply` → Flux 適用 |
+| `image-scan` | PR / push / 毎週月曜 | Trivy でコンテナ image をスキャン |
+| `Build host images` | `hosts/**` の PR / `hosts-v*` タグ / 手動 | Alpine image をビルドして Release |
+| `Host ops` | 手動のみ (要承認) | Tunnel 経由 SSH でパッケージ更新 / 再起動 |
+| `Host update check` | 毎週月曜 9:00 | k3s / Alpine の新版があればピン更新 PR |
+
+Dependabot はコンテナ image と Actions を担当（Helm chart と Flux 本体は手動）。
+
+---
+
+## 🔐 シークレット
+
+- Git には平文を置かない。CI へは GitHub Secrets / Environment 経由
+- DB パスワード・Tunnel トークンは Terraform が生成して k8s Secret に
+- k3s token は bootstrap 時に node1 で生成し、メモリ上でのみ配布
+- SSH は公開鍵のみ。鍵は焼き込み時に注入し image にも Git にも入れない
 
 ---
 
 ## 📜 ログを見る
 
-[logs.riya.work/select/vmui/](https://logs.riya.work/select/vmui/) を開き、上の欄にクエリを入れて実行します。
-各ノードの Vector が Pod のログ・dmesg・`/var/log/k3s.log`・`/var/log/k3s-agent.log` を送っています。
-保存先は emptyDir なので、VictoriaLogs の Pod が再起動するとログは消えます(最大 7 日 / 5GiB)。
+[logs.riya.work/select/vmui/](https://logs.riya.work/select/vmui/) でクエリを実行。
+
+<details>
+<summary>よく使うクエリ</summary>
 
 | 見たいもの | クエリ |
 | --- | --- |
-| dmesg(カーネル) | `source:=dmesg` |
-| k3s(server) | `source:="/var/log/k3s.log"` |
+| dmesg | `source:=dmesg` |
+| k3s (server) | `source:="/var/log/k3s.log"` |
 | k3s-agent | `source:="/var/log/k3s-agent.log"` |
-| 特定ノードだけ | `host:=node4 source:=dmesg` |
-| namespace の Pod ログ | `kubernetes.pod_namespace:=headlamp` |
+| ノードで絞る | `host:=node4 source:=dmesg` |
+| namespace の Pod | `kubernetes.pod_namespace:=headlamp` |
 | Pod 名で絞る | `kubernetes.pod_name:postgres*` |
 | エラーっぽい行 | `kubernetes.pod_namespace:=postgres error` |
-| 全部 | `*` |
 
-- 空白区切りで AND になります。`or` / `not` も使えます
-- 時間範囲は右上で変えます
-- dmesg は Vector が再起動すると同じ行がもう一度入ります
+- 空白区切りで AND、`or` / `not` も可
+- 保存先は emptyDir（最大 7 日 / 5GiB）。Pod 再起動で消える
+- Vector 再起動で dmesg が重複して入る
 
----
-
-## 🔄 デプロイの流れ
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor R as 👩‍💻 Riya
-    participant GH as GitHub
-    participant CI as GitHub Actions
-    participant CF as Cloudflare
-    participant K as k3s
-    participant F as Flux
-
-    R->>GH: PR を作る
-    GH->>CI: terraform fmt / validate / plan
-    CI->>CF: cloudflared access tcp で API に到達
-    R->>GH: main にマージ
-    GH->>CI: terraform apply
-    CI->>CF: Tunnel / DNS / Access を更新
-    CI->>K: Namespace・Secret を作成
-    CI->>K: Flux を apply して reconcile を要求
-    F->>GH: リポジトリを取得
-    F->>K: infrastructure → postgres → apps の順で適用
-    K-->>R: クラスタが更新される 🎉
-```
-
-### Flux の依存関係
-
-```mermaid
-flowchart LR
-    a["infrastructure<br/>Longhorn / CNPG / cloudflared"] --> b["postgres<br/>Cluster / Database"]
-    a --> c["apps<br/>Headlamp / VictoriaLogs"]
-    b --> c
-```
-
-CNPG の CRD は `infrastructure` の HelmRelease が入れるため、`Cluster` は別の Kustomization に分けて後から適用しています。
+</details>
 
 ---
 
-## 📁 ディレクトリ構成
+## ➕ アプリを足す
 
-```text
-lab
-├── .github/
-│   ├── workflows/deploy.yaml          # CI: plan / apply / Flux 適用
-│   └── dependabot.yml                 # cloudflared / anubis / fantasy イメージの更新 PR
-├── fluxcd/                            # Flux 本体と Kustomization 定義
-│   ├── flux-system/
-│   ├── infrastructure.yaml
-│   ├── postgres.yaml
-│   ├── k3s-upgrade.yaml
-│   └── apps.yaml
-├── infrastructure/                    # 基盤コンポーネント
-│   ├── longhorn/                      # ストレージと StorageClass
-│   ├── cnpg/                          # CloudNativePG operator
-│   ├── postgres/                      # 共有 PostgreSQL クラスタ
-│   ├── system-upgrade-controller/     # k3s / Alpine 自動アップグレードの controller
-│   ├── k3s-upgrade/                   # k3s の Plan(stable チャンネル追従)と Alpine の週次更新 Plan
-│   └── cloudflare/                    # cloudflared Deployment(Dependabot で更新 PR)
-├── apps/
-│   ├── anubis/                        # anubis.riya.work(Anubis → nginx、サイトのコードは tsuji-riya/anubis.riya.work)
-│   ├── fantasy/                       # fantasy.riya.work(サイトのコードは tsuji-riya/fantasy.riya.work)
-│   ├── headlamp/                      # Headlamp HelmRelease
-│   └── victoria-logs/                 # VictoriaLogs + Vector(ログ)
-└── terraform/
-    ├── cloudflare/                    # Tunnel / DNS / Access
-    ├── kubernetes.tf                  # Namespace と Secret
-    └── ...
-```
-
----
-
-## 🔐 シークレットの扱い
-
-- DB と管理者のパスワードは Terraform の `random_password` で生成し、Kubernetes Secret として配置します
-- Tunnel トークンも Terraform が作って Secret に格納します
-- Git には平文のシークレットを置かず、CI の GitHub Secrets 経由で渡します
-
----
-
-## ➕ アプリを追加するには
-
-1. DB が必要なら `infrastructure/postgres/` にロールと `Database` を追加
-2. `terraform/kubernetes.tf` に Namespace と Secret を追加
-3. `apps/<name>/` に HelmRelease などを置いて `apps/kustomization.yaml` に登録
-4. 外部公開するなら `terraform/cloudflare/tunnel.tf` と `dns_record.tf` にホスト名を追加
-5. PR を作ってマージすれば完了です 🐱
+- [ ] DB が要るなら `infrastructure/postgres/` にロールと `Database`
+- [ ] `terraform/kubernetes.tf` に Namespace と Secret
+- [ ] `apps/<name>/` を作り `apps/kustomization.yaml` に登録
+- [ ] 公開するなら `terraform/cloudflare/tunnel.tf` と `dns_record.tf` にホスト名
+- [ ] PR → merge で完了 🐱
 
 ---
 
