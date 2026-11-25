@@ -65,11 +65,11 @@ locals {
 }
 
 resource "github_actions_environment_secret" "hosts" {
-  for_each        = local.hosts_env_secret_names
-  repository      = "lab"
-  environment     = github_repository_environment.hosts.environment
-  secret_name     = each.key
-  plaintext_value = local.hosts_env_secret_values[each.key]
+  for_each    = local.hosts_env_secret_names
+  repository  = "lab"
+  environment = github_repository_environment.hosts.environment
+  secret_name = each.key
+  value       = local.hosts_env_secret_values[each.key]
 }
 
 # 公開鍵なので変数 (平文) でよい。トンネル経由のホスト名で引ける形
