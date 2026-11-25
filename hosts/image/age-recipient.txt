@@ -1,3 +1,0 @@
-# CI では使いません (Actions Secret の AGE_RECIPIENT が正)。
-# これはローカルで image を作るときの予備の置き場です。
-# age 公開鍵 (age1...) を使う場合はここに1行で入れてください。

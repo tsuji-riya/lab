@@ -1,6 +1,8 @@
 #!/bin/sh
 # 初回起動時のみ: 焼き込み時に注入された node.conf から identity を適用する。
-# node.conf の探索先: Pi の /boot、x86 の EFI パーティション (/boot/efi)。
+# node.conf の探索先: /boot (Pi の FAT、x86 は ESP が /boot にマウントされる)。
+# 途中で失敗したらマーカーを書かずに終わり、次回起動で最初からやり直す。
+# そのため各手順は何度流しても同じ結果になるように書く。
 set -eu
 MARKER=/etc/lab-firstboot-done
 [ -f "$MARKER" ] && exit 0
@@ -11,19 +13,31 @@ for p in /boot/node.conf /boot/efi/node.conf /media/*/node.conf; do
 done
 [ -n "$CONF" ] || { echo "node.conf not found, skipping"; exit 0; }
 
-# NODE_HOSTNAME= / NODE_IP= / NODE_GATEWAY= / NODE_ROLE=
+# NODE_HOSTNAME= / NODE_IP= / NODE_GATEWAY= / NODE_DNS= / NODE_ROLE=
+# SSH_PUBKEY= / SSH_PUBKEY_CI= / SSH_HOST_KEY_B64= / CF_TUNNEL_TOKEN= / CF_API_TUNNEL_TOKEN=
+# shellcheck source=/dev/null
 . "$CONF"
+GATEWAY="${NODE_GATEWAY:-192.168.1.1}"
 
-# SSH ホスト鍵をこの台専用に生成 (image には焼いていない)
-[ -f /etc/ssh/ssh_host_ed25519_key ] || ssh-keygen -A
+# SSH ホスト鍵は Terraform が台ごとに生成した値を受け取る (焼き直しても不変
+# なので known_hosts を作り直す必要が無い)。無ければこの場で生成する
+if [ -n "${SSH_HOST_KEY_B64:-}" ]; then
+  (umask 077 && echo "$SSH_HOST_KEY_B64" | base64 -d > /etc/ssh/ssh_host_ed25519_key)
+  ssh-keygen -y -f /etc/ssh/ssh_host_ed25519_key > /etc/ssh/ssh_host_ed25519_key.pub
+elif [ ! -f /etc/ssh/ssh_host_ed25519_key ]; then
+  ssh-keygen -q -t ed25519 -N '' -f /etc/ssh/ssh_host_ed25519_key
+fi
 
-# 管理用公開鍵は node.conf 経由で受け取る (Git にも image にも入れない)
+# 管理用公開鍵は node.conf 経由で受け取る (Git にも image にも入れない)。
+# CI (Host converge) 用の鍵は本人の鍵と分け、CI だけを失効できるようにする
 if [ -n "${SSH_PUBKEY:-}" ]; then
-  mkdir -p /home/riya/.ssh
-  echo "$SSH_PUBKEY" > /home/riya/.ssh/authorized_keys
-  chmod 700 /home/riya/.ssh
+  install -d -m 700 -o riya -g riya /home/riya/.ssh
+  {
+    echo "$SSH_PUBKEY"
+    [ -z "${SSH_PUBKEY_CI:-}" ] || echo "$SSH_PUBKEY_CI"
+  } > /home/riya/.ssh/authorized_keys
   chmod 600 /home/riya/.ssh/authorized_keys
-  chown -R riya:riya /home/riya
+  chown riya:riya /home/riya/.ssh/authorized_keys
 fi
 
 hostname "$NODE_HOSTNAME"
@@ -35,27 +49,38 @@ auto eth0
 iface eth0 inet static
   address ${NODE_IP}
   netmask 255.255.255.0
-  gateway ${NODE_GATEWAY:-192.168.1.1}
+  gateway ${GATEWAY}
 EOF
-echo "${NODE_IP} ${NODE_HOSTNAME}" >> /etc/hosts
+# busybox ifupdown は dns-nameservers を解釈しないので resolv.conf を直接書く。
+# image にはビルド環境の resolv.conf を残していない (configure-chroot で削除)
+{
+  for ns in ${NODE_DNS:-$GATEWAY 1.1.1.1}; do echo "nameserver $ns"; done
+} > /etc/resolv.conf
+grep -q "^${NODE_IP} " /etc/hosts || echo "${NODE_IP} ${NODE_HOSTNAME} ${NODE_HOSTNAME%%.*}" >> /etc/hosts
 
-# root パーティションをディスク末尾まで拡張 (image は 4G で作るため)
+# root パーティションをディスク末尾まで拡張 (image は 4G で作るため)。
+# growpart は使用中パーティションの拡張 (partx で kernel に反映) と、
+# x86 の GPT バックアップヘッダの末尾への移動の両方を面倒見る。
+# 終了コード 1 は「既に最大」(NOCHANGE) で正常扱い
 ROOT_DEV=$(findmnt -no SOURCE /)
-DISK=$(lsblk -no PKNAME "$ROOT_DEV" || true)
-PARTNO=$(echo "$ROOT_DEV" | grep -o '[0-9]*$')
-if [ -n "$DISK" ] && [ -n "$PARTNO" ]; then
-  parted -s "/dev/$DISK" resizepart "$PARTNO" 100% || true
-  resize2fs "$ROOT_DEV" || true
-fi
+DISK=$(lsblk -no PKNAME "$ROOT_DEV")
+PARTNO=$(cat "/sys/class/block/$(basename "$ROOT_DEV")/partition")
+rc=0
+growpart "/dev/$DISK" "$PARTNO" || rc=$?
+[ "$rc" -le 1 ] || { echo "growpart failed ($rc)" >&2; exit 1; }
+resize2fs "$ROOT_DEV"
 
-# Cloudflare Tunnel (GitHub Actions からの SSH 到達用)。トークンは
-# node.conf 経由で焼き込み時にだけ渡し、ファイルに置いてサービス起動
-if [ -n "${CF_TUNNEL_TOKEN:-}" ]; then
-  install -d -m 700 /etc/cloudflared
-  printf '%s' "$CF_TUNNEL_TOKEN" > /etc/cloudflared/token
-  chmod 600 /etc/cloudflared/token
-  rc-service cf-tunnel start || true
-fi
+# Cloudflare Tunnel。トークンは node.conf 経由で焼き込み時にだけ渡す。
+# CF_TUNNEL_TOKEN: 台ごとの SSH 用 (全台) / CF_API_TUNNEL_TOKEN: k3s API 用 (server のみ)
+install -d -m 700 /etc/cloudflared
+for pair in "cf-tunnel:${CF_TUNNEL_TOKEN:-}" "cf-tunnel.api:${CF_API_TUNNEL_TOKEN:-}"; do
+  svc=${pair%%:*} token=${pair#*:}
+  [ -n "$token" ] || continue
+  (umask 077 && printf '%s' "$token" > "/etc/cloudflared/${svc}.token")
+  rc-service "$svc" start || true
+done
 
 date -u +%FT%TZ > "$MARKER"
+# node.conf はトンネル token を含み、FAT 上で誰でも読める。適用後は消す
+rm -f "$CONF"
 echo "firstboot done: $NODE_HOSTNAME $NODE_IP"

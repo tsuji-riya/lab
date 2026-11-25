@@ -1,6 +1,19 @@
 ---
-# ホスト収束 (day-2)。何度流しても同じ結果になること。
-- hosts: all
+# ホスト収束 (初回構築と day-2 の両方)。何度流しても同じ結果になること。
+# 実行は main へのマージ・定期・手動で host-converge workflow が行う。
+# server は inventory 順 (node1 から) に1台ずつ: 既存の server が居なければ
+# node1 が cluster-init し、居ればそこへ join する (k3s_node ロールが判定)
+- name: Converge servers
+  hosts: servers
+  serial: 1
+  order: inventory
+  roles:
+    - base
+    - firewall
+    - k3s_node
+
+- name: Converge agents
+  hosts: agents
   roles:
     - base
     - firewall

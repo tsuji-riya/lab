@@ -1,6 +1,6 @@
 # ホスト SSH 用 Cloudflare Tunnel (PR #42/#43 のホスト層)。
 # ノードごとにトンネルを張り、ssh-nodeN.riya.work -> ssh://localhost:22
-# を Access で保護する。GitHub Actions (Host ops) はサービストークンで、
+# を Access で保護する。GitHub Actions (Host converge) はサービストークンで、
 # 本人は owner_only ポリシー (メール) でブラウザ SSH できる。
 locals {
   host_nodes = toset([
@@ -93,6 +93,14 @@ resource "cloudflare_zero_trust_access_application" "host_ssh" {
       precedence = 2
     },
   ]
+}
+
+output "host_nodes" {
+  value = local.host_nodes
+}
+
+output "host_ssh_hostnames" {
+  value = local.host_ssh_hostname
 }
 
 output "host_tunnel_tokens" {

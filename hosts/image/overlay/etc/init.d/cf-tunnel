@@ -1,16 +1,22 @@
 #!/sbin/openrc-run
 # shellcheck shell=sh disable=SC2034
-# Cloudflare Tunnel (リモート管理トンネル) を token-file で起動する。
+# Cloudflare Tunnel を token-file で起動する。サービス名ごとに token を分ける:
+#   cf-tunnel      → /etc/cloudflared/cf-tunnel.token      (台ごとの SSH 用、全台)
+#   cf-tunnel.api  → /etc/cloudflared/cf-tunnel.api.token  (k3s API 用、server のみ)
+# cf-tunnel.api は cf-tunnel への symlink (OpenRC の多重インスタンス)。
 # トークンが無い台では start_pre で静かに失敗する (通常運用に影響しない)。
 
 name="cloudflared tunnel"
-description="Cloudflare Tunnel for SSH access"
+description="Cloudflare Tunnel (${RC_SVCNAME})"
 command="/usr/bin/cloudflared"
-command_args="tunnel --no-autoupdate run --token-file /etc/cloudflared/token"
+token_file="/etc/cloudflared/${RC_SVCNAME}.token"
+command_args="tunnel --no-autoupdate run --token-file ${token_file}"
 command_background="yes"
 pidfile="/run/${RC_SVCNAME}.pid"
-output_log="/var/log/cloudflared.log"
-error_log="/var/log/cloudflared.log"
+# /var/log は 64M の tmpfs。ファイルに直接吐くと無制限に伸びるので syslog
+# (busybox syslogd がサイズでローテートする) に流す
+output_logger="logger -t ${RC_SVCNAME} -p daemon.info"
+error_logger="logger -t ${RC_SVCNAME} -p daemon.err"
 
 depend() {
   need net
@@ -18,5 +24,5 @@ depend() {
 }
 
 start_pre() {
-  [ -s /etc/cloudflared/token ] || { eerror "no tunnel token"; return 1; }
+  [ -s "$token_file" ] || { eerror "no tunnel token: $token_file"; return 1; }
 }

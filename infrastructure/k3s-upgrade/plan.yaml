@@ -1,4 +1,7 @@
 # server(control plane)を先に、その後 agent を 1 台ずつアップグレードする
+# 版は channel 追従でなく固定する。稼働中の k3s の版の正本はここで、
+# 週次の host-update-check が hosts/ansible/group_vars/all.yml (初回インストール版)
+# と同時に書き換える PR を作る。マージが版上げの承認になる
 apiVersion: upgrade.cattle.io/v1
 kind: Plan
 metadata:
@@ -8,7 +11,7 @@ spec:
   concurrency: 1
   exclusive: true
   cordon: true
-  channel: https://update.k3s.io/v1-release/channels/stable
+  version: v1.37.2+k3s1
   nodeSelector:
     matchExpressions:
     - { key: node-role.kubernetes.io/control-plane, operator: Exists }
@@ -25,7 +28,7 @@ spec:
   concurrency: 1
   exclusive: true
   cordon: true
-  channel: https://update.k3s.io/v1-release/channels/stable
+  version: v1.37.2+k3s1
   nodeSelector:
     matchExpressions:
     - { key: node-role.kubernetes.io/control-plane, operator: DoesNotExist }

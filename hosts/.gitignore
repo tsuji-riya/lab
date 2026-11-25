@@ -11,11 +11,11 @@ mnt-root/
 *.local.yml
 .env
 *node-token*
-*vault*.yml
+# Ansible Vault は暗号化済みなら commit してよい。平文は *.local.yml に置く
 id_*
 *.pem
 *.key
-!image/overlay/home/riya/.ssh/authorized_keys
+node.conf
 
 # Ansible の残骸
 *.retry

@@ -1,9 +1,25 @@
 ---
 timezone: Asia/Tokyo
 admin_user: riya
+# 初回インストール時の版。以後の版上げは SUC の Plan
+# (infrastructure/k3s-upgrade/plan.yaml の spec.version) が正本で、
+# host-update-check が両方を同時に書き換える。
+# ここだけ変えても稼働中の台は上がらない
 k3s_version: "v1.37.2+k3s1"
-# join 先は DNS 名に寄せる (要判断 1)。3台の CP を返す A レコードを用意すること。
-k3s_api_host: "api.k3s.riya.work"
 k3s_api_port: 6443
 lan_cidr: "192.168.1.0/24"
-# k3s_token はここに書かない。bootstrap 時に node1 から取得し実行中のみ保持する。
+# LAN の IP の正本 (flash/nodes.conf と一致させること)。
+# join 先の決定と LAN 用 inventory の両方がここを引く
+node_ips:
+  node1: 192.168.1.10
+  node2: 192.168.1.11
+  node3: 192.168.1.12
+  node4: 192.168.1.13
+  node5: 192.168.1.14
+  node6: 192.168.1.15
+  node7: 192.168.1.16
+# Longhorn に既定ディスクを作らせるタグ (Pi の USB SSD)
+longhorn_disk_tags: ["ssd"]
+# クラスタ token は Terraform が生成し、CI では Environment シークレット、
+# Mac では fetch-tokens.sh が書く env から渡る。ファイルには書かない
+k3s_token: "{{ lookup('ansible.builtin.env', 'K3S_TOKEN') }}"

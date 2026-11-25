@@ -2,10 +2,10 @@ name: deploy
 
 on:
   pull_request:
-    paths: [terraform/**, fluxcd/**, infrastructure/**, apps/**, .github/workflows/deploy.yaml]
+    paths: [terraform/**, fluxcd/**, infrastructure/**, apps/**, .github/workflows/deploy.yaml, .github/scripts/k3s-api-tunnel.sh]
   push:
     branches: [main]
-    paths: [terraform/**, fluxcd/**, infrastructure/**, apps/**, .github/workflows/deploy.yaml]
+    paths: [terraform/**, fluxcd/**, infrastructure/**, apps/**, .github/workflows/deploy.yaml, .github/scripts/k3s-api-tunnel.sh]
 
 permissions:
   contents: read
@@ -18,6 +18,8 @@ concurrency:
 env:
   TF_IN_AUTOMATION: "true"
   TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  # hosts/ 用の Environment・シークレットを書くための fine-grained PAT (一度だけ人が発行)
+  TF_VAR_github_token: ${{ secrets.TF_GITHUB_TOKEN }}
   AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
   TF_VAR_k8s_cluster_ca_certificate: ${{ secrets.K8S_CLUSTER_CA_CERTIFICATE }}
@@ -45,14 +47,8 @@ jobs:
         env:
           TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-        run: |
-          nohup cloudflared access tcp --hostname lab-k3s-api.riya.work --url 127.0.0.1:6443 > /tmp/cloudflared.log 2>&1 &
-          for i in $(seq 1 20); do
-            (echo > /dev/tcp/127.0.0.1/6443) 2>/dev/null && exit 0
-            sleep 1
-          done
-          cat /tmp/cloudflared.log
-          exit 1
+        working-directory: .
+        run: ./.github/scripts/k3s-api-tunnel.sh
 
       - name: Init
         run: |

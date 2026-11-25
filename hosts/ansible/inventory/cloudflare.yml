@@ -2,11 +2,15 @@
 # GitHub Actions から Cloudflare Tunnel (Access SSH) 経由で接続する用。
 # ホスト名は Zero Trust 側で各ノードのトンネルに割り当てた公開ホスト名。
 # 認証は cloudflared access が TUNNEL_SERVICE_TOKEN_ID/SECRET を使う。
+# ホスト鍵は検証する (runner は毎回まっさらなので accept-new では検証にならない)。
+# known_hosts は host-converge workflow が Environment 変数 HOSTS_KNOWN_HOSTS
+# (Terraform が生成・登録) から ~/.ssh/known_hosts に書く。
 all:
   vars:
+    ansible_private_key_file: ~/.ssh/lab_ci
     ansible_ssh_common_args: >-
       -o ProxyCommand="cloudflared access ssh --hostname %h"
-      -o StrictHostKeyChecking=accept-new
+      -o StrictHostKeyChecking=yes
   children:
     servers:
       hosts:

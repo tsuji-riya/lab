@@ -1,33 +1,34 @@
 ---
-- name: nftables base (image と同じ内容を正本として再配布)
-  copy:
+# nftables の反映は handler の nft -f だけで行う。サービスの restart / reload は
+# Alpine の init スクリプトが flush ruleset を伴い、kube-proxy / flannel の
+# ルールまで消して通信断になるため使わない (base ファイルは自テーブルだけ作り直す)
+- name: Nftables.d exists
+  ansible.builtin.file:
+    path: /etc/nftables.d
+    state: directory
+    mode: "0755"
+- name: Nftables base (image と同じ内容を正本として再配布)
+  ansible.builtin.copy:
     src: "{{ playbook_dir }}/../image/overlay/etc/nftables.nft"
     dest: /etc/nftables.nft
-- name: k3s ports fragment (server)
-  copy:
+    mode: "0644"
+  notify: Apply nftables
+- name: K3s ports fragment
+  ansible.builtin.copy:
     dest: /etc/nftables.d/20-k3s.nft
+    mode: "0644"
     content: |
       table inet filter {
         chain input {
-          ip saddr {{ lan_cidr }} tcp dport { 6443, 2379-2380, 10250 } accept
-          tcp dport { 8472, 10250 } accept
-          udp dport 8472 accept
+      {% if inventory_hostname in groups['servers'] %}
+          ip saddr {{ lan_cidr }} tcp dport { 6443, 2379-2380 } accept
+      {% endif %}
+          ip saddr {{ lan_cidr }} tcp dport 10250 accept
+          ip saddr {{ lan_cidr }} udp dport 8472 accept
         }
       }
-  when: inventory_hostname in groups['servers']
-- name: k3s ports fragment (agent)
-  copy:
-    dest: /etc/nftables.d/20-k3s.nft
-    content: |
-      table inet filter {
-        chain input {
-          tcp dport 10250 accept
-          udp dport 8472 accept
-        }
-      }
-  when: inventory_hostname in groups['agents']
-- name: nftables enabled and loaded
-  service:
+  notify: Apply nftables
+- name: Nftables enabled at boot
+  ansible.builtin.service:
     name: nftables
     enabled: true
-    state: restarted

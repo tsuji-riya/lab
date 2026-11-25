@@ -1,48 +1,53 @@
 ---
+# image の overlay と同じ内容を正本 (overlay) から再配布する。
+# ここに中身を書き写すと image と Ansible で二重管理になりドリフトするため
 - name: Timezone
-  copy:
-    src: /usr/share/zoneinfo/Asia/Tokyo
+  ansible.builtin.copy:
+    src: "/usr/share/zoneinfo/{{ timezone }}"
     dest: /etc/localtime
     remote_src: true
-- name: ntpd enabled
-  service:
+    mode: "0644"
+- name: Ntpd enabled
+  ansible.builtin.service:
     name: ntpd
     enabled: true
     state: started
-- name: "sysctl (全台共通に統一: 要判断 2)"
-  copy:
+- name: Sysctl (overlay と共通)
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../image/overlay/etc/sysctl.d/99-lab.conf"
     dest: /etc/sysctl.d/99-lab.conf
-    content: |
-      vm.swappiness = 0
-      vm.dirty_writeback_centisecs = 1500
-      vm.dirty_expire_centisecs = 3000
+    owner: root
+    group: root
+    mode: "0644"
   notify: Reload sysctl
-- name: sshd is key-only
-  copy:
+- name: Sshd is key-only (overlay と共通)
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../image/overlay/etc/ssh/sshd_config.d/10-lab.conf"
     dest: /etc/ssh/sshd_config.d/10-lab.conf
-    content: |
-      PasswordAuthentication no
-      KbdInteractiveAuthentication no
-      PermitRootLogin prohibit-password
-      AllowUsers {{ admin_user }}
+    owner: root
+    group: root
+    mode: "0644"
   notify: Reload sshd
-- name: Kernel modules (全台実測で同一)
-  copy:
-    dest: /etc/modules
-    content: |
-      af_packet
-      ipv6
-      iscsi_tcp
-      dm_crypt
-- name: rshared root mount (Longhorn の伝播に必須)
-  copy:
-    dest: /etc/local.d/rshared.start
-    mode: "0755"
-    content: |
-      #!/bin/sh
-      mount --make-rshared /
+- name: Sudoers (overlay と共通)
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../image/overlay/etc/sudoers.d/riya"
+    dest: /etc/sudoers.d/riya
+    owner: root
+    group: root
+    mode: "0440"
+    validate: visudo -cf %s
+- name: Kernel modules and rshared mount (overlay と共通)
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../image/overlay/{{ item.path }}"
+    dest: "/{{ item.path }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: etc/modules, mode: "0644"}
+    - {path: etc/local.d/rshared.start, mode: "0755"}
 - name: Services for k3s / Longhorn (全台実測で同一)
-  service:
+  ansible.builtin.service:
     name: "{{ item }}"
     enabled: true
     state: started
@@ -50,8 +55,8 @@
     - cgroups
     - iscsid
     - local
-- name: tmpfs mounts (全台実測で同一)
-  blockinfile:
+- name: Tmpfs mounts (全台実測で同一)
+  ansible.builtin.blockinfile:
     path: /etc/fstab
     marker: "# {mark} lab-hosts tmpfs"
     block: |
@@ -65,7 +70,7 @@
     opts: "{{ item.opts | default('defaults,nofail') }}"
     state: mounted
   loop: "{{ extra_mounts | default([]) }}"
-- name: root password locked
-  user:
+- name: Root password locked
+  ansible.builtin.user:
     name: root
     password_lock: true
