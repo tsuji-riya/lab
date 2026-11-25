@@ -52,6 +52,10 @@ jobs:
             -o /tmp/cloudflared
           echo "${CF_SHA256}  /tmp/cloudflared" | sha256sum -c
           sudo install -m 755 /tmp/cloudflared /usr/local/bin/cloudflared
+      # ansible-core 2.22 は Python 3.13 以上が必要 (runner 標準は 3.12)
+      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: "3.13"
       - name: Install Ansible (版を固定)
         run: |
           pip install --quiet "ansible-core==2.22.*"
