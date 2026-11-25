@@ -8,7 +8,7 @@
 
 1. Terraform が GitHub に書くための fine-grained PAT を作る
    (Repository access: この repo のみ / Permissions: Administration,
-   Secrets, Variables をそれぞれ Read and write)。repo シークレット
+   Environments, Secrets, Variables をそれぞれ Read and write)。repo シークレット
    `TF_GITHUB_TOKEN` に登録する
 2. この PR をマージすると deploy workflow の terraform apply が
    - Environment `hosts` (main からのみ使用可、reviewer なし) を作り

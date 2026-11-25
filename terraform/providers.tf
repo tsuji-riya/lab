@@ -11,7 +11,8 @@ provider "kubernetes" {
 
 # hosts/ 用の Environment・シークレット・変数を Terraform から直接書く。
 # GITHUB_TOKEN ではシークレットを書けないため、この repo だけに絞った
-# fine-grained PAT (Administration / Secrets / Variables: write) を使う
+# fine-grained PAT (Administration / Environments / Secrets / Variables: write) を使う。
+# Environment のシークレット・変数は Secrets / Variables ではなく Environments 権限が要る
 provider "github" {
   owner = "tsuji-riya"
   token = var.github_token

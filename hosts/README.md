@@ -115,7 +115,7 @@ cd hosts/ansible && ansible-playbook site.yml --limit node7
 | k3s API トンネル token | Cloudflare provider | ― | node.conf で server (node1-3) にだけ配る |
 
 - 人が1度だけやること: Terraform が GitHub に書くための fine-grained PAT
-  (この repo のみ、Administration / Secrets / Variables: Read and write) を作り、
+  (この repo のみ、Administration / Environments / Secrets / Variables: Read and write) を作り、
   repo シークレット `TF_GITHUB_TOKEN` に登録する。GITHUB_TOKEN はシークレットを
   書けないので、ここだけは人が鍵を渡す必要がある
 - node.conf は秘密を含むので、Mac 側は本人だけが読める一時ファイルに置いて
