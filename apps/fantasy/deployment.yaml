@@ -22,7 +22,7 @@ spec:
       containers:
         # サイト本体は tsuji-riya/fantasy.riya.work でビルドしたイメージ (自作サーバー + EmulatorJS、scratch)。ROM は入っていない
         - name: server
-          image: ghcr.io/tsuji-riya/fantasy.riya.work:1.0.18@sha256:4eb87391920613a2d4f1447dfa37488c713d830f1b466f3f506a7a560ee6c4c9
+          image: ghcr.io/tsuji-riya/fantasy.riya.work:1.0.21@sha256:53d8929377f650ebbb6194672ed0fe65d58628d2d28106bfcd8a324709eb9083
           ports:
             - name: http
               containerPort: 8080
