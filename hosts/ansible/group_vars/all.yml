@@ -1,6 +1,8 @@
 ---
 timezone: Asia/Tokyo
 admin_user: riya
+# 自動検出 (版付きの python3.14 を拾い警告が出る) をやめ、版に依存しないパスに固定
+ansible_python_interpreter: /usr/bin/python3
 # 初回インストール時の版。以後の版上げは SUC の Plan
 # (infrastructure/k3s-upgrade/plan.yaml の spec.version) が正本で、
 # host-update-check が両方を同時に書き換える。
