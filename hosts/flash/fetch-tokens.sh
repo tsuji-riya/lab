@@ -18,21 +18,21 @@
 set -eu
 cd "$(dirname "$0")/../.."
 
-# 初回は deploy ワークフローと同じ形で init する
-if [ ! -d terraform/.terraform ]; then
-  : "${R2_BUCKET:?R2_BUCKET が必要です}" "${R2_ENDPOINT:?R2_ENDPOINT が必要です}"
-  terraform -chdir=terraform init \
-    -backend-config="bucket=${R2_BUCKET}" \
-    -backend-config="endpoints={s3=\"${R2_ENDPOINT}\"}"
-fi
+# deploy ワークフローと同じ形で毎回 init する (冪等で数秒)。.terraform の有無で
+# 省略すると、古い .terraform (backend 未設定や provider 不足) を初期化済みと誤認する
+: "${R2_BUCKET:?R2_BUCKET が必要です}" "${R2_ENDPOINT:?R2_ENDPOINT が必要です}"
+terraform -chdir=terraform init -input=false -reconfigure \
+  -backend-config="bucket=${R2_BUCKET}" \
+  -backend-config="endpoints={s3=\"${R2_ENDPOINT}\"}" >/dev/null
 
 OUT_DIR="${HOSTS_SECRETS_DIR:-$HOME/.config/lab-hosts}"
 export OUT_DIR
 (umask 077 && mkdir -p "$OUT_DIR")
 chmod 700 "$OUT_DIR"
 
-terraform -chdir=terraform output -json host_identity \
-  | python3 -c '
+# パイプに直結すると terraform の失敗が JSON の解析エラーに化けるので、先に受ける
+IDENTITY=$(terraform -chdir=terraform output -json host_identity)
+printf '%s' "$IDENTITY" | python3 -c '
 import base64, json, os, sys
 ids = json.load(sys.stdin)
 out = os.environ["OUT_DIR"]
