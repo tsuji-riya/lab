@@ -29,6 +29,14 @@
          | selectattr('stat.exists')
          | map(attribute='item') | list }}
 
+# delegate_to は when より先に評価されるため、空リストでも安全な値にしておく
+# (members[0] だと server が1台も居ない初回に when で飛ばす前に落ちる)。
+# 同じ set_fact 内では直前に設定した変数を参照できないので別タスクにする
+- name: Pick the server to delegate cluster operations to
+  ansible.builtin.set_fact:
+    k3s_node_join_host: >-
+      {{ k3s_node_members | first | default(inventory_hostname) }}
+
 - name: Install k3s on a new node
   when: not k3s_node_bin.stat.exists
   block:
@@ -53,7 +61,7 @@
         k3s kubectl delete node {{ inventory_hostname }} --ignore-not-found
         k3s kubectl -n kube-system delete secret \
           {{ inventory_hostname }}.node-password.k3s --ignore-not-found
-      delegate_to: "{{ k3s_node_members[0] }}"
+      delegate_to: "{{ k3s_node_join_host }}"
       when: k3s_node_members | length > 0
       register: k3s_node_forget
       changed_when: "'deleted' in k3s_node_forget.stdout"
@@ -101,7 +109,7 @@
       ansible.builtin.command: >-
         k3s kubectl get node {{ inventory_hostname }}
         -o {{ disks_jsonpath | quote }}
-      delegate_to: "{{ k3s_node_members[0] }}"
+      delegate_to: "{{ k3s_node_join_host }}"
       register: k3s_node_disk_annotation
       until: k3s_node_disk_annotation.rc == 0
       retries: 30
@@ -112,6 +120,6 @@
       ansible.builtin.command: >-
         k3s kubectl annotate node {{ inventory_hostname }} --overwrite
         node.longhorn.io/default-disks-config={{ disks_config | quote }}
-      delegate_to: "{{ k3s_node_members[0] }}"
+      delegate_to: "{{ k3s_node_join_host }}"
       when: k3s_node_disk_annotation.stdout != disks_config
       changed_when: true
