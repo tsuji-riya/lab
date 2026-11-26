@@ -78,6 +78,21 @@ jobs:
           TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           ANSIBLE_FORCE_COLOR: "1"
+        # 台ごとに別々に流す。1回でまとめて流すと、serial: 1 の server で1台でも
+        # 届かない台 (電源断・焼き直し待ち) があった時点で Ansible が残りの台
+        # (新しく焼いた agent を含む) を処理せずに打ち切る。順序は inventory 順
+        # (node1 → … → node7) なので、server を先に収束させる性質は変わらない
         run: |
-          ansible-playbook site.yml -i inventory/cloudflare.yml \
-            --limit "${LIMIT}" --diff
+          hosts=$(ansible all -i inventory/cloudflare.yml --list-hosts \
+            --limit "${LIMIT}" | tail -n +2 | awk '{print $1}')
+          failed=""
+          for h in $hosts; do
+            echo "::group::${h}"
+            ansible-playbook site.yml -i inventory/cloudflare.yml \
+              --limit "$h" --diff || failed="${failed} ${h}"
+            echo "::endgroup::"
+          done
+          if [ -n "$failed" ]; then
+            echo "::error::収束できなかった台:${failed}"
+            exit 1
+          fi
