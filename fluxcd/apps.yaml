@@ -9,7 +9,6 @@ spec:
   prune: true
   dependsOn:
     - name: infrastructure
-    - name: postgres
   sourceRef:
     kind: GitRepository
     name: flux-system

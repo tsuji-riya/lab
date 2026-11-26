@@ -72,10 +72,8 @@ flowchart LR
 ```mermaid
 flowchart LR
     infra["infrastructure<br/>Longhorn · CNPG · cloudflared · SUC"]
-    pg["postgres<br/>CNPG Cluster"]
     apps["apps<br/>Headlamp · VictoriaLogs · anubis · fantasy"]
     up["k3s-upgrade<br/>k3s / Alpine の Plan"]
-    infra --> pg --> apps
     infra --> apps
     infra --> up
 ```
@@ -83,7 +81,7 @@ flowchart LR
 | 種類 | コンポーネント | バージョン | メモ |
 | --- | --- | --- | --- |
 | 💾 ストレージ | Longhorn | chart `1.13.0` | `ssd` タグのディスクのみ使用 |
-| 🐘 DB | CloudNativePG | chart `0.29.1` | 共有 PostgreSQL (primary + standby) |
+| 🐘 DB | CloudNativePG | chart `0.29.1` | オペレータのみ。DB (Cluster) は今は無し |
 | 🚇 公開経路 | cloudflared | `2026.11.2` | ×2、ポート開放なし |
 | 🔁 自動更新 | system-upgrade-controller | `v0.21.1` | k3s は stable 追従、Alpine は週次 (日曜 3:00) |
 | 🔦 UI | Headlamp | chart `0.46.0` | 閲覧専用 |
@@ -95,13 +93,7 @@ flowchart LR
 
 | 名前 | ディスク | レプリカ | 用途 |
 | --- | --- | --- | --- |
-| `longhorn-ssd-single` | Pi の USB SSD (`ssd`) | 1 (`strict-local`) | PostgreSQL。冗長化は CNPG 側 |
-
-### 🐘 PostgreSQL
-
-- `postgres` ns に 2 台、非同期レプリケーション。Anti-Affinity で別ノード・`etcd` ロールに配置
-- `wal_compression` + `checkpoint_timeout: 15min` で WAL を抑制
-- アプリ用のロール / DB は `infrastructure/postgres/` に追加（今はまだなし）
+| `longhorn-ssd-single` | Pi の USB SSD (`ssd`) | 1 (`strict-local`) | DB 用 (今は未使用)。冗長化は CNPG 側 |
 
 ---
 
@@ -179,8 +171,8 @@ Dependabot はコンテナ image と Actions を担当（Helm chart と Flux 本
 | k3s-agent | `source:="/var/log/k3s-agent.log"` |
 | ノードで絞る | `host:=node4 source:=dmesg` |
 | namespace の Pod | `kubernetes.pod_namespace:=headlamp` |
-| Pod 名で絞る | `kubernetes.pod_name:postgres*` |
-| エラーっぽい行 | `kubernetes.pod_namespace:=postgres error` |
+| Pod 名で絞る | `kubernetes.pod_name:anubis*` |
+| エラーっぽい行 | `kubernetes.pod_namespace:=anubis error` |
 
 - 空白区切りで AND、`or` / `not` も可
 - 保存先は emptyDir（最大 7 日 / 5GiB）。Pod 再起動で消える
@@ -192,7 +184,7 @@ Dependabot はコンテナ image と Actions を担当（Helm chart と Flux 本
 
 ## ➕ アプリを足す
 
-- [ ] DB が要るなら `infrastructure/postgres/` にロールと `Database`
+- [ ] DB が要るなら CNPG の `Cluster` を足す (`longhorn-ssd-single` は strict-local なので Pi に置く)
 - [ ] `terraform/kubernetes.tf` に Namespace と Secret
 - [ ] `apps/<name>/` を作り `apps/kustomization.yaml` に登録
 - [ ] 公開するなら `terraform/cloudflare/tunnel.tf` と `dns_record.tf` にホスト名
