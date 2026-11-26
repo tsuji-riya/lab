@@ -9,6 +9,8 @@ coreutils
 curl
 dosfstools
 e2fsprogs
+# resize2fs は e2fsprogs ではなくこちら (firstboot の rootfs 拡張に必須)
+e2fsprogs-extra
 findutils
 iptables
 mount

@@ -45,6 +45,7 @@ docker run --rm --privileged -v "$PWD:/work" -v /lib/modules:/lib/modules:ro -w 
     --packages \"\$(cat .cache/packages.txt)\" \
     --repositories-file image/repositories \
     --fs-skel-dir image/overlay \
+    --fs-skel-chown root:root \
     --script-chroot ${OUT} -- image/configure-chroot.sh
 "
 

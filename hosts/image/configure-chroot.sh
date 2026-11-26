@@ -90,21 +90,27 @@ apk info -v > /etc/lab/packages.manifest
 # sudoers.d のパーミッションを正す (緩いと sudo が読み飛ばす)
 chmod 440 /etc/sudoers.d/riya 2>/dev/null || true
 
-# overlay は cp -a で焼かれるため、コピー元 (CI の checkout) の uid が
-# そのまま残る。/etc/sudoers.d が uid 1001 所有だと sudo が読み込みを
-# 拒否する (node7 実機で発覚)。/etc と /usr は全面 root 所有が正常形
-chown -R 0:0 /etc /usr
+# overlay の所有者は焼く側で root にしている (build-rpi.sh: --no-preserve=ownership、
+# build-x86.sh: --fs-skel-chown)。ここで chown -R /etc /usr をすると、chown が
+# setuid ビットを消すため sudo / su が全滅する (node7 実機で発覚、2026-11-26)
 
 # sshd は鍵のみ (drop-in が本体)
 passwd -l root || true
 
 # SSH ホスト鍵は image に焼かない。apk の post-install が chroot 内で
 # 生成してしまうため、ここで必ず消す。初回起動時に node-firstboot が
-# 台ごとに生成する (全台同一のホスト鍵 + 公開 image は impersonation の温床)
+# node.conf の台ごとの鍵 (Terraform 生成) を置く (全台同一の鍵 + 公開 image は
+# impersonation の温床)
 rm -f /etc/ssh/ssh_host_*
 
 # ビルド環境 (runner / docker) の resolv.conf を image に残さない。
 # runner 固有の 127.0.0.53 などが焼かれると実機で名前解決できない。
 # 実機の resolv.conf は node-firstboot が node.conf から書く
 rm -f /etc/resolv.conf
+# 自己チェック: 実機で初めて分かった失敗を build で落とす
+[ -u /usr/bin/sudo ] || { echo "sudo の setuid が無い" >&2; exit 1; }
+[ "$(stat -c %u /etc/sudoers.d/riya)" = 0 ] || { echo "sudoers.d/riya が root 所有でない" >&2; exit 1; }
+for cmd in growpart resize2fs findmnt lsblk partx sfdisk cloudflared; do
+  command -v "$cmd" >/dev/null || { echo "firstboot が使う $cmd が無い" >&2; exit 1; }
+done
 echo "chroot configure done"
