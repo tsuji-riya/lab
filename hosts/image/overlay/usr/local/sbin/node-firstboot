@@ -7,11 +7,30 @@ set -eu
 MARKER=/etc/lab-firstboot-done
 [ -f "$MARKER" ] && exit 0
 
-CONF=""
+CONF="" CONF_DEV=""
 for p in /boot/node.conf /boot/efi/node.conf /media/*/node.conf; do
   [ -f "$p" ] && CONF="$p" && break
 done
-[ -n "$CONF" ] || { echo "node.conf not found, skipping"; exit 0; }
+# /boot に無ければ、起動したディスク (/ と同じディスク) の vfat パーティションを探す。
+# mini PC を USB 起動した段階では内蔵ディスクの旧 ESP も刺さっており、fstab の
+# LABEL=EFI が別のディスクを /boot に掴むことがある (node1 で node.conf を見落とした、
+# 2026-11-26)。全ディスクは探さない: 旧 ESP に古い node.conf が残っていることがある
+if [ -z "$CONF" ]; then
+  tmp=$(mktemp -d)
+  root_disk=$(lsblk -no PKNAME "$(findmnt -no SOURCE /)")
+  for dev in $(lsblk -lnpo NAME,FSTYPE "/dev/${root_disk}" | awk '$2 == "vfat" { print $1 }'); do
+    mount -o ro "$dev" "$tmp" 2>/dev/null || continue
+    if [ -f "$tmp/node.conf" ]; then
+      (umask 077 && cp "$tmp/node.conf" /run/node.conf)
+      CONF=/run/node.conf CONF_DEV="$dev"
+    fi
+    umount "$tmp"
+    [ -n "$CONF" ] && break
+  done
+  rmdir "$tmp"
+fi
+[ -n "$CONF" ] || { echo "node.conf not found (/boot にも起動ディスクの vfat にも無い), skipping"; exit 0; }
+echo "node.conf: ${CONF_DEV:-$CONF}"
 
 # NODE_HOSTNAME= / NODE_IP= / NODE_GATEWAY= / NODE_DNS= / NODE_ROLE=
 # SSH_PUBKEY= / SSH_PUBKEY_CI= / SSH_HOST_KEY_B64= / CF_TUNNEL_TOKEN= / CF_API_TUNNEL_TOKEN=
@@ -85,4 +104,9 @@ done
 date -u +%FT%TZ > "$MARKER"
 # node.conf はトンネル token を含み、FAT 上で誰でも読める。適用後は消す
 rm -f "$CONF"
+if [ -n "$CONF_DEV" ]; then
+  tmp=$(mktemp -d)
+  mount "$CONF_DEV" "$tmp" && rm -f "$tmp/node.conf" && umount "$tmp"
+  rmdir "$tmp"
+fi
 echo "firstboot done: $NODE_HOSTNAME $NODE_IP"
