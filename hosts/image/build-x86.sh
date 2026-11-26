@@ -23,6 +23,9 @@ grep -h -v '^#' image/packages.common image/packages.x86_64 | grep -v '^$' > .ca
 # 見えず modprobe できないので、ホスト側で先にロードしておく
 sudo modprobe nbd max_part=16
 
+# image は中身 (約 580MiB, 2026-11) が収まる最小に近い 1G にして、USB と内蔵への
+# 書き込み量を減らす。rootfs は node-firstboot の growpart でディスク全体に広がる。
+# 中身が増えて溢れるとビルド中の apk が失敗するので、そのときは増やす
 # ビルドは Alpine コンテナ内で行う (apk の root 構築が最も素直なため)
 docker run --rm --privileged -v "$PWD:/work" -v /lib/modules:/lib/modules:ro -w /work alpine:3.24 sh -eu -c "
   # qemu-nbd のバイナリは qemu-img パッケージに同梱されている (3.24)
@@ -38,7 +41,7 @@ docker run --rm --privileged -v "$PWD:/work" -v /lib/modules:/lib/modules:ro -w 
     --arch x86_64 \
     --branch ${BRANCH} \
     --image-format raw \
-    --image-size 4G \
+    --image-size 1G \
     --boot-mode UEFI \
     --kernel-flavor lts \
     --initfs-features \"kms scsi virtio ata nvme usb\" \
