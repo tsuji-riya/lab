@@ -96,8 +96,11 @@ echo "== 手順6: 内蔵側 EFI 領域に node.conf を書きます =="
   sudo partx -d /dev/${TARGET} 2>/dev/null || true
   sudo partx -a /dev/${TARGET}
   sudo mdev -s
-  ESP=\$(sudo blkid -o device -t TYPE=vfat /dev/${TARGET}* | head -n 1)
-  [ -n \"\$ESP\" ] || { echo '内蔵側の EFI 領域が見つからない' >&2; exit 1; }
+  # image の partition 1 が ESP (alpine-make-vm-image の GPT 構成)。blkid -t は
+  # キャッシュを引くため dd 前の旧ディスクの情報で空振りした (node1、2026-11-26)。
+  # 探さずに partition 1 を使い、-p (キャッシュを使わない直接の調査) で vfat を確かめる
+  case ${TARGET} in nvme*|mmcblk*) ESP=/dev/${TARGET}p1 ;; *) ESP=/dev/${TARGET}1 ;; esac
+  [ \"\$(sudo blkid -p -s TYPE -o value \$ESP)\" = vfat ] || { echo \"内蔵側の EFI 領域 (\$ESP) が vfat でない\" >&2; ls -l /dev/${TARGET}*; exit 1; }
   sudo mount \"\$ESP\" /mnt
   sudo tee /mnt/node.conf >/dev/null
   ls -l /mnt/node.conf
