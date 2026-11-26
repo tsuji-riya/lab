@@ -69,14 +69,6 @@ if [ "$(uname -m)" = x86_64 ]; then
     UUID=*) ;;
     *) echo "root の UUID が fstab から引けない: $ROOT_SPEC" >&2; exit 1 ;;
   esac
-  # alpine-make-vm-image は /boot を LABEL=EFI でマウントする。mini PC を USB 起動
-  # すると内蔵ディスクの旧 ESP も同じラベルで、そちらが /boot に掴まれた
-  # (node1、2026-11-26: node.conf を見落とし、dd 後に sda1 が使用中で再作成されなかった)。
-  # image 自身の ESP の UUID で指定する
-  ESP_UUID=$(blkid -s UUID -o value "$(findmnt -no SOURCE /boot)")
-  [ -n "$ESP_UUID" ] || { echo "ESP の UUID が引けない" >&2; exit 1; }
-  sed -i "s|^LABEL=EFI\([[:space:]]\)|UUID=${ESP_UUID}\1|" /etc/fstab
-  grep -q "^UUID=${ESP_UUID}[[:space:]]" /etc/fstab || { echo "fstab の /boot を UUID にできない" >&2; exit 1; }
   # build-x86.sh の --initfs-features (nvme/ata/usb) で initramfs を作り直す。
   # カーネル導入時点の initramfs は機能設定より前に作られている
   mkinitfs "$(ls /lib/modules)"
