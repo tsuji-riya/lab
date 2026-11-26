@@ -1,4 +1,0 @@
----
-- name: Apply nftables
-  ansible.builtin.shell: nft -c -f /etc/nftables.nft && nft -f /etc/nftables.nft
-  changed_when: true
