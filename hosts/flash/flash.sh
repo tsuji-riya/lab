@@ -90,26 +90,28 @@ CONF_FILE=$(umask 077 && mktemp "${TMPDIR:-/tmp}/node.conf.XXXXXX")
 emit_conf > "$CONF_FILE"
 
 # macOS では boot パーティションをマウントして自動で流し込む。
-# dd 直後は macOS が新しいパーティション表を読み直す前のことがあり、1回の
-# diskutil mount では失敗する (x86 の GPT image で node.conf が入らず、firstboot が
-# "node.conf not found" で何もしなかった、2026-11-26)。数回待って試し、書けたかを
-# 中身の比較で確かめ、だめなら黙って進まずに止める
+# x86 の GPT image では partition 1 が EFI 種別で、macOS は root でないと
+# マウントしない (Pi の FAT32/MBR は不要)。sudo なしで失敗し、node.conf が入らず
+# firstboot が "node.conf not found" で何もしなかった (node1、2026-11-26)。
+# dd 直後の再認識待ちも兼ねて数回試し、書けたかを中身の比較で確かめ、
+# だめなら黙って進まずに止める
 if [ "$(uname)" = "Darwin" ]; then
   MP=""
   for _ in 1 2 3 4 5 6 7 8 9 10; do
-    diskutil mount "${DEV}s1" >/dev/null 2>&1 || true
+    MOUNT_ERR=$(sudo diskutil mount "${DEV}s1" 2>&1) || true
     MP=$(diskutil info "${DEV}s1" 2>/dev/null | sed -n 's/^[[:space:]]*Mount Point:[[:space:]]*//p')
     [ -n "$MP" ] && [ -d "$MP" ] && break
     MP=""
     sleep 3
   done
-  if [ -n "$MP" ] && cp "$CONF_FILE" "$MP/node.conf" && cmp -s "$CONF_FILE" "$MP/node.conf"; then
+  if [ -n "$MP" ] && sudo cp "$CONF_FILE" "$MP/node.conf" \
+    && sudo cmp -s "$CONF_FILE" "$MP/node.conf"; then
     echo "node.conf を $MP に書き込みました"
     rm -f "$CONF_FILE"
     diskutil eject "$DEV" >/dev/null 2>&1 || true
   else
     rm -f "$CONF_FILE"
-    echo "node.conf を書き込めなかった (${DEV}s1 をマウントできない)。" >&2
+    echo "node.conf を書き込めなかった (${DEV}s1): ${MOUNT_ERR:-不明}" >&2
     echo "USB を挿し直してから、node.conf だけ書き直す:" >&2
     echo "  ./hosts/flash/flash.sh --node ${NODE} --device ${DEV} --inject-only" >&2
     exit 1
