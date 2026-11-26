@@ -5,8 +5,9 @@
 #   1台も居なければ inventory 先頭 (node1) だけが cluster-init する
 # - 新しい agent: 動いている server へ join (居なければ失敗し、次回再試行)
 #
-# token は Terraform 生成の固定値を K3S_TOKEN 環境変数で渡す。引数で渡すと
-# install スクリプトが /etc/init.d/k3s (誰でも読める) に平文で書き込む
+# token は Terraform 生成の固定値を root だけが読めるファイルに置き、--token-file で
+# 渡す。引数 (--token) だと /etc/init.d/k3s (誰でも読める) に平文で残り、環境変数だと
+# ansible -vvv の実行ログに出る。ファイルなら install の出力を伏せずに済む
 
 - name: Is k3s installed here
   ansible.builtin.stat:
@@ -77,20 +78,53 @@
                 + (k3s_api_port | string)
                 if k3s_node_members | length > 0 else ' --cluster-init') }}
           --node-name {{ inventory_hostname }}
+          --token-file /etc/rancher/k3s/cluster-token
           {{ '--node-label node.longhorn.io/create-default-disk=config'
              if inventory_hostname in groups['agents'] else '' }}
 
-    - name: Install k3s
-      ansible.builtin.shell: >
-        set -o pipefail &&
-        curl -sfL https://get.k3s.io |
-        INSTALL_K3S_VERSION={{ k3s_version }} sh -s - {{ k3s_node_args }}
-      args:
-        creates: /usr/local/bin/k3s
-        executable: /bin/bash
-      environment:
-        K3S_TOKEN: "{{ k3s_token }}"
+    - name: Token directory
+      ansible.builtin.file:
+        path: /etc/rancher/k3s
+        state: directory
+        mode: "0755"
+
+    - name: Place the cluster token (root only)
+      ansible.builtin.copy:
+        content: "{{ k3s_token }}"
+        dest: /etc/rancher/k3s/cluster-token
+        owner: root
+        group: root
+        mode: "0600"
       no_log: true
+
+    - name: Install k3s
+      block:
+        - name: Run the k3s install script
+          ansible.builtin.shell: >
+            set -o pipefail &&
+            curl -sfL https://get.k3s.io |
+            INSTALL_K3S_VERSION={{ k3s_version }} sh -s - {{ k3s_node_args }}
+          args:
+            creates: /usr/local/bin/k3s
+            executable: /bin/bash
+      rescue:
+        # 失敗理由は install スクリプトより k3s 本体のログにあることが多い
+        - name: Show the k3s log
+          ansible.builtin.command: tail -n 60 {{ k3s_node_log }}
+          changed_when: false
+          failed_when: false
+          register: k3s_node_log_tail
+        - name: Fail with the k3s log
+          ansible.builtin.fail:
+            msg: "{{ k3s_node_log_tail.stdout_lines | default([]) }}"
+
+# 毎回の収束で、サービスが有効で動いていることを確かめる。install が途中で失敗した
+# 台は k3s のバイナリだけ残り、次回の install (creates) が飛ばされてしまうため
+- name: K3s service enabled and running
+  ansible.builtin.service:
+    name: "{{ k3s_node_service }}"
+    enabled: true
+    state: started
 
 # Longhorn は create-default-disk=config ラベルの台にだけ、この注釈どおりの
 # 既定ディスクを作る (createDefaultDiskLabeledNodes)。毎回の収束で揃える
