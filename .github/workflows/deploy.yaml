@@ -6,6 +6,8 @@ on:
   push:
     branches: [main]
     paths: [terraform/**, fluxcd/**, infrastructure/**, apps/**, .github/workflows/deploy.yaml, .github/scripts/k3s-api-tunnel.sh]
+  # クラスタを作り直したとき、Host converge が K8S_* を新しい証明書に替えてから起動する
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -63,11 +65,11 @@ jobs:
         run: terraform plan -input=false -out=tfplan
 
       - name: Apply
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: terraform apply -input=false tfplan
 
       - name: Apply Flux
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         working-directory: .
         run: |
           d="$RUNNER_TEMP/kube"

@@ -30,6 +30,8 @@ on:
 
 permissions:
   contents: read
+  # クラスタを作り直したときに deploy を起動する (下の Sync CI kubeconfig)
+  actions: write
 
 concurrency:
   group: host-converge
@@ -105,3 +107,53 @@ jobs:
             echo "::error::収束できなかった台:${failed}"
             exit 1
           fi
+      # クラスタを作り直すと CA が変わり、deploy が使う K8S_* が効かなくなる
+      # (k3s による admin 証明書の年次更新でも同じ)。node1 の証明書が前回と
+      # 違えば K8S_* を書き換え、deploy を起動して Terraform の Secret と Flux を戻す。
+      # Converge が一部の台で失敗しても node1 が生きていれば同期したいので !cancelled()
+      - name: Sync CI kubeconfig
+        if: ${{ !cancelled() }}
+        env:
+          TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          # repo のシークレット / 変数を書く権限は Terraform 用の PAT にしかない
+          SECRETS_TOKEN: ${{ secrets.TF_GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_SHA256: ${{ vars.K8S_CLIENT_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          # 値はログに出さない (同じ run 内で取り出した値はマスクされない)
+          umask 077
+          kc="$RUNNER_TEMP/k3s.yaml"
+          if ! timeout 60 ssh -i ~/.ssh/lab_ci -o StrictHostKeyChecking=yes \
+            -o ProxyCommand="cloudflared access ssh --hostname %h" \
+            riya@ssh-node1.riya.work 'sudo cat /etc/rancher/k3s/k3s.yaml' \
+            > "$kc" 2>/dev/null || [ ! -s "$kc" ]; then
+            echo "::warning::node1 の k3s.yaml を読めない。K8S_* の同期を飛ばす"
+            exit 0
+          fi
+          field() { awk -v k="$1:" '$1 == k {print $2; exit}' "$kc" | base64 -d; }
+          sha=$(field client-certificate-data | sha256sum | cut -d' ' -f1)
+          if [ "$sha" = "${CURRENT_SHA256:-}" ]; then
+            echo "K8S_* は最新"
+            exit 0
+          fi
+          pairs="certificate-authority-data:K8S_CLUSTER_CA_CERTIFICATE
+          client-certificate-data:K8S_CLIENT_CERTIFICATE
+          client-key-data:K8S_CLIENT_KEY"
+          # 1つでも壊れていたら何も書かない (途中まで書くと deploy が壊れる)
+          for pair in $pairs; do
+            case "$(field "${pair%%:*}")" in
+              -----BEGIN*) ;;
+              *) echo "::error::k3s.yaml の ${pair%%:*} が PEM でない"; exit 1 ;;
+            esac
+          done
+          for pair in $pairs; do
+            field "${pair%%:*}" | GH_TOKEN="$SECRETS_TOKEN" \
+              gh secret set "${pair#*:}" --repo "$GITHUB_REPOSITORY"
+          done
+          GH_TOKEN="$SECRETS_TOKEN" gh variable set K8S_CLIENT_CERT_SHA256 \
+            --repo "$GITHUB_REPOSITORY" --body "$sha"
+          rm -f "$kc"
+          gh workflow run deploy.yaml --repo "$GITHUB_REPOSITORY" --ref main
+          echo "K8S_* を更新して deploy を起動した"
