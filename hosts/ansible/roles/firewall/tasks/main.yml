@@ -1,7 +1,7 @@
 ---
-# nftables の反映は handler の nft -f だけで行う。サービスの restart / reload は
-# Alpine の init スクリプトが flush ruleset を伴い、kube-proxy / flannel の
-# ルールまで消して通信断になるため使わない (base ファイルは自テーブルだけ作り直す)
+# nftables の反映は nft -f で行う。サービスの restart / reload は Alpine の init
+# スクリプトが flush ruleset を伴い、kube-proxy / flannel のルールまで消して通信断に
+# なるため使わない (base ファイルは自テーブルだけ作り直す)
 - name: Nftables.d exists
   ansible.builtin.file:
     path: /etc/nftables.d
@@ -12,7 +12,6 @@
     src: "{{ playbook_dir }}/../image/overlay/etc/nftables.nft"
     dest: /etc/nftables.nft
     mode: "0644"
-  notify: Apply nftables
 - name: K3s ports fragment
   ansible.builtin.copy:
     dest: /etc/nftables.d/20-k3s.nft
@@ -27,8 +26,15 @@
           ip saddr {{ lan_cidr }} udp dport 8472 accept
         }
       }
-  notify: Apply nftables
 - name: Nftables enabled at boot
   ansible.builtin.service:
     name: nftables
     enabled: true
+# 毎回読み込む (変更時だけの handler にしない)。handler はプレイが後続タスクで
+# 失敗すると実行されず、次回からはファイルに変更が無いので二度と呼ばれない。
+# node1 で k3s の install が失敗した回に書かれた 6443 等の許可が読み込まれないまま
+# 残り、node7 が join できなかった (2026-11-26)。nft -f は一括適用なので毎回でも
+# 通信は途切れない。読み込み前に -c で構文を確かめる
+- name: Load nftables rules (every run)
+  ansible.builtin.shell: nft -c -f /etc/nftables.nft && nft -f /etc/nftables.nft
+  changed_when: false

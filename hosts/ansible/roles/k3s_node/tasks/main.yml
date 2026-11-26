@@ -71,16 +71,21 @@
     # SUC や kubectl での指定と食い違う
     - name: Build k3s install arguments
       ansible.builtin.set_fact:
+        # 1つの式の中でリストを組み立てて join する。YAML の折り返し (>-) で
+        # 式の外にテキストを並べると、字下げの深い行の後ろの改行が残り、shell では
+        # そこでコマンドが切れる (--node-name 以降が k3s に渡らず、ノード名が FQDN の
+        # まま、Longhorn のラベルも付かなかった。node1/node7 で発生)
         k3s_node_args: >-
-          {{ ('server' if inventory_hostname in groups['servers']
-              else 'agent')
-             + (' --server https://' + node_ips[k3s_node_members[0]] + ':'
-                + (k3s_api_port | string)
-                if k3s_node_members | length > 0 else ' --cluster-init') }}
-          --node-name {{ inventory_hostname }}
-          --token-file /etc/rancher/k3s/cluster-token
-          {{ '--node-label node.longhorn.io/create-default-disk=config'
-             if inventory_hostname in groups['agents'] else '' }}
+          {{ ([k3s_node_kind]
+              + (['--server', 'https://' + node_ips[k3s_node_join_host]
+                  + ':' + (k3s_api_port | string)]
+                 if k3s_node_members | length > 0 else ['--cluster-init'])
+              + ['--node-name', inventory_hostname,
+                 '--token-file', '/etc/rancher/k3s/cluster-token']
+              + (['--node-label',
+                  'node.longhorn.io/create-default-disk=config']
+                 if inventory_hostname in groups['agents'] else []))
+             | join(' ') }}
 
     - name: Token directory
       ansible.builtin.file:
@@ -157,3 +162,14 @@
       delegate_to: "{{ k3s_node_join_host }}"
       when: k3s_node_disk_annotation.stdout != disks_config
       changed_when: true
+  rescue:
+    # 登録されないときの理由は server ではなく、その台自身の k3s ログにある
+    # (node7 で k3s-agent が起動中のまま登録されず、理由が見えなかった)
+    - name: Show this node's k3s log
+      ansible.builtin.command: tail -n 60 {{ k3s_node_log }}
+      changed_when: false
+      failed_when: false
+      register: k3s_node_reg_log
+    - name: Fail with this node's k3s log
+      ansible.builtin.fail:
+        msg: "{{ k3s_node_reg_log.stdout_lines | default([]) }}"

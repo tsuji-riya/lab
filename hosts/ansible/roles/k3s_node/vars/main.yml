@@ -3,3 +3,5 @@
 k3s_node_service: >-
   {{ 'k3s' if inventory_hostname in groups['servers'] else 'k3s-agent' }}
 k3s_node_log: "/var/log/{{ k3s_node_service }}.log"
+k3s_node_kind: >-
+  {{ 'server' if inventory_hostname in groups['servers'] else 'agent' }}
