@@ -1,5 +1,4 @@
 locals {
-  longhorn_hostname = "longhorn.riya.work"
   headlamp_hostname = "headlamp.riya.work"
   logs_hostname     = "logs.riya.work"
   anubis_hostname   = "anubis.riya.work"
@@ -22,10 +21,6 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "k3s" {
 
   config = {
     ingress = [
-      {
-        hostname = local.longhorn_hostname
-        service  = "http://longhorn-frontend.longhorn-system.svc.cluster.local:80"
-      },
       {
         hostname = local.headlamp_hostname
         service  = "http://headlamp.headlamp.svc.cluster.local:80"

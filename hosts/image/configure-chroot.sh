@@ -16,9 +16,9 @@ mkdir -p /home/riya/.ssh
 chmod 700 /home/riya/.ssh
 chown -R riya:riya /home/riya
 
-# サービス有効化 (実測: cgroups / iscsid / local は全台 default)
+# サービス有効化 (実測: cgroups / local は全台 default)
 # nftables と node-firstboot は新規分。k3s / k3s-agent は導入時に有効化される
-for svc in sshd nftables ntpd cgroups iscsid local cf-tunnel cf-tunnel.api; do
+for svc in sshd nftables ntpd cgroups local cf-tunnel cf-tunnel.api; do
   rc-update add "$svc" default || rc-update add "$svc" boot
 done
 # identity 適用は networking より先 (boot ランレベル)

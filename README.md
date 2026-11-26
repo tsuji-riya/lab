@@ -51,7 +51,7 @@ flowchart LR
         subgraph K3S["k3s"]
             flux["🌀 Flux"]
             cfd["cloudflared ×2"]
-            svc["Longhorn / Headlamp<br/>VictoriaLogs / anubis / fantasy"]
+            svc["Headlamp<br/>VictoriaLogs / anubis / fantasy"]
         end
         hosts["🖥️ node1-7<br/>sshd"]
     end
@@ -71,7 +71,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    infra["infrastructure<br/>Longhorn · CNPG · cloudflared · SUC"]
+    infra["infrastructure<br/>cloudflared · SUC"]
     apps["apps<br/>Headlamp · VictoriaLogs · anubis · fantasy"]
     up["k3s-upgrade<br/>k3s / Alpine の Plan"]
     infra --> apps
@@ -80,8 +80,6 @@ flowchart LR
 
 | 種類 | コンポーネント | バージョン | メモ |
 | --- | --- | --- | --- |
-| 💾 ストレージ | Longhorn | chart `1.13.0` | `ssd` タグのディスクのみ使用 |
-| 🐘 DB | CloudNativePG | chart `0.29.1` | オペレータのみ。DB (Cluster) は今は無し |
 | 🚇 公開経路 | cloudflared | `2026.11.2` | ×2、ポート開放なし |
 | 🔁 自動更新 | system-upgrade-controller | `v0.21.1` | k3s は stable 追従、Alpine は週次 (日曜 3:00) |
 | 🔦 UI | Headlamp | chart `0.46.0` | 閲覧専用 |
@@ -89,19 +87,12 @@ flowchart LR
 | 🎮 サイト | anubis | Anubis `v1.28.2` | Anubis ちゃんが無限に出る ([repo](https://github.com/tsuji-riya/anubis.riya.work)) |
 | 🎮 サイト | fantasy | `1.0.18` | ブラウザで Fantasy Zone、ROM は手元から ([repo](https://github.com/tsuji-riya/fantasy.riya.work)) |
 
-### 💾 StorageClass
-
-| 名前 | ディスク | レプリカ | 用途 |
-| --- | --- | --- | --- |
-| `longhorn-ssd-single` | Pi の USB SSD (`ssd`) | 1 (`strict-local`) | DB 用 (今は未使用)。冗長化は CNPG 側 |
-
 ---
 
 ## 🌐 公開ホスト
 
 | ホスト | 行き先 | 制限 |
 | --- | --- | --- |
-| `longhorn.riya.work` | Longhorn UI | 🔒 Access `owner-only` |
 | `headlamp.riya.work` | Headlamp | 🔒 Access `owner-only` |
 | `logs.riya.work` | VictoriaLogs | 🔒 Access `owner-only` |
 | `anubis.riya.work` | anubis | 🌍 公開 |
@@ -184,7 +175,6 @@ Dependabot はコンテナ image と Actions を担当（Helm chart と Flux 本
 
 ## ➕ アプリを足す
 
-- [ ] DB が要るなら CNPG の `Cluster` を足す (`longhorn-ssd-single` は strict-local なので Pi に置く)
 - [ ] `terraform/kubernetes.tf` に Namespace と Secret
 - [ ] `apps/<name>/` を作り `apps/kustomization.yaml` に登録
 - [ ] 公開するなら `terraform/cloudflare/tunnel.tf` と `dns_record.tf` にホスト名

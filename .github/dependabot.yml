@@ -41,7 +41,7 @@ updates:
   # flux CLI で一括再生成して上げるものなので、個別に上げないよう対象にしない。
   # Helm チャートのバージョン (HelmRelease の spec.chart.spec.version) も
   # Chart.yaml が無いこのリポジトリでは Dependabot の対象にできないため、
-  # headlamp / victoria-logs / cnpg / longhorn は従来どおり手動で上げる
+  # headlamp / victoria-logs は従来どおり手動で上げる
 
   # ワークフローで使う Action (checkout, Trivy 等) の更新
   - package-ecosystem: github-actions
