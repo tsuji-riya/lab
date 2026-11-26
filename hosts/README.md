@@ -131,9 +131,8 @@ overlay と Ansible base ロールに取り込み済み。
 
 - `cgroups` サービスを default で有効化。cgroup は全台 cgroup2 統一
   (v1 混在や rc.conf の追加設定は無し)
-- `/etc/local.d/rshared.start` で `mount --make-rshared /` (Longhorn の伝播)
-- `/etc/modules` = af_packet, ipv6, iscsi_tcp, dm_crypt
-- `iscsid` 有効化 + world に open-iscsi / nfs-utils (Longhorn の前提)
+- `/etc/modules` = af_packet, ipv6, dm_crypt
+- (Longhorn の前提だった rshared / iscsi_tcp / iscsid / open-iscsi / nfs-utils は Longhorn 撤去で外した)
 - Pi の cmdline: `usb-storage.quirks=7825:a2a4:u` (USB-SATA の UAS 無効化) と
   `cgroup_enable=cpuset cgroup_enable=memory cgroup_memory=1`
   (ファームウェア既定の cgroup_disable=memory を後勝ちで打ち消す)

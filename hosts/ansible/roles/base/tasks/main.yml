@@ -36,7 +36,7 @@
     group: root
     mode: "0440"
     validate: visudo -cf %s
-- name: Kernel modules and rshared mount (overlay と共通)
+- name: Kernel modules (overlay と共通)
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../image/overlay/{{ item.path }}"
     dest: "/{{ item.path }}"
@@ -45,15 +45,13 @@
     mode: "{{ item.mode }}"
   loop:
     - {path: etc/modules, mode: "0644"}
-    - {path: etc/local.d/rshared.start, mode: "0755"}
-- name: Services for k3s / Longhorn (全台実測で同一)
+- name: Services for k3s (全台実測で同一)
   ansible.builtin.service:
     name: "{{ item }}"
     enabled: true
     state: started
   loop:
     - cgroups
-    - iscsid
     - local
 - name: Tmpfs mounts (全台実測で同一)
   ansible.builtin.blockinfile:

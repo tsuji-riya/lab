@@ -26,8 +26,6 @@ rules:
     resources: [nodes, pods]
     verbs: [get, list, watch]
   - apiGroups:
-      - longhorn.io
-      - postgresql.cnpg.io
       - source.toolkit.fluxcd.io
       - kustomize.toolkit.fluxcd.io
       - helm.toolkit.fluxcd.io

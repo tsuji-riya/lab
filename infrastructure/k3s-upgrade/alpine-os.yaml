@@ -14,7 +14,7 @@ spec:
     matchExpressions:
     - { key: kubernetes.io/os, operator: In, values: [linux] }
   serviceAccountName: system-upgrade
-  # drain(Longhorn のレプリカ退避を含む、最大 30 分)+ 更新 + 再起動 + 下の sleep が収まる長さ。
+  # drain+ 更新 + 再起動 + 下の sleep が収まる長さ。
   # 超えると Job が失敗し、SUC は uncordon しないのでノードが cordon のまま残る
   jobActiveDeadlineSecs: 7200
   # cordon/drain より前に走る。対象外のノードを無駄に drain せず失敗させる

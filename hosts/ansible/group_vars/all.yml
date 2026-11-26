@@ -20,8 +20,6 @@ node_ips:
   node5: 192.168.1.14
   node6: 192.168.1.15
   node7: 192.168.1.16
-# Longhorn に既定ディスクを作らせるタグ (Pi の USB SSD)
-longhorn_disk_tags: ["ssd"]
 # クラスタ token は Terraform が生成し、CI では Environment シークレット、
 # Mac では fetch-tokens.sh が書く env から渡る。ファイルには書かない
 k3s_token: "{{ lookup('ansible.builtin.env', 'K3S_TOKEN') }}"
