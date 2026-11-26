@@ -72,12 +72,14 @@ resize2fs "$ROOT_DEV"
 
 # Cloudflare Tunnel。トークンは node.conf 経由で焼き込み時にだけ渡す。
 # CF_TUNNEL_TOKEN: 台ごとの SSH 用 (全台) / CF_API_TUNNEL_TOKEN: k3s API 用 (server のみ)
+# token を置くだけで、起動は default ランレベルに任せる。ここで rc-service start すると、
+# cf-tunnel は need net → networking は before で node-firstboot の完了待ち、の
+# 待ち合わせになり 50 秒 x 2 のタイムアウトで起動が止まる (node1、2026-11-26)
 install -d -m 700 /etc/cloudflared
 for pair in "cf-tunnel:${CF_TUNNEL_TOKEN:-}" "cf-tunnel.api:${CF_API_TUNNEL_TOKEN:-}"; do
   svc=${pair%%:*} token=${pair#*:}
   [ -n "$token" ] || continue
   (umask 077 && printf '%s' "$token" > "/etc/cloudflared/${svc}.token")
-  rc-service "$svc" start || true
 done
 
 date -u +%FT%TZ > "$MARKER"
