@@ -77,7 +77,7 @@ EOF
 } > /etc/resolv.conf
 grep -q "^${NODE_IP} " /etc/hosts || echo "${NODE_IP} ${NODE_HOSTNAME} ${NODE_HOSTNAME%%.*}" >> /etc/hosts
 
-# root パーティションをディスク末尾まで拡張 (image は 4G で作るため)。
+# root パーティションをディスク末尾まで拡張 (image は小さく作るため: x86 1G, rpi 4G)。
 # growpart は使用中パーティションの拡張 (partx で kernel に反映) と、
 # x86 の GPT バックアップヘッダの末尾への移動の両方を面倒見る。
 # 終了コード 1 は「既に最大」(NOCHANGE) で正常扱い
