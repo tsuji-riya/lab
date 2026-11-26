@@ -89,16 +89,17 @@ case "$IMG" in
 esac | $SSH "sudo dd of=/dev/${TARGET} bs=4M status=progress conv=fsync"
 
 echo "== 手順6: 内蔵側 EFI 領域に node.conf を書きます =="
-# dd 直後はカーネルが古いパーティション表を見ているので、先に読み直させる。
+# dd 直後はカーネルが古いパーティション表を見ており、読み直し (partx) をしても
+# /dev/sda1 が作られないことがあった (node1、2026-11-26、原因未特定)。デバイスファイルに
+# 頼らず、ディスク上のパーティション表から partition 1 (ESP) の位置を読んで loop で開く。
 # node.conf は Mac で生成し直して標準入力で流す (token を一時ファイルに置かない)
 ./flash/flash.sh --node "$NODE" --emit-conf | $SSH "
   set -eu
-  sudo partx -d /dev/${TARGET} 2>/dev/null || true
-  sudo partx -a /dev/${TARGET}
-  sudo mdev -s
-  ESP=\$(sudo blkid -o device -t TYPE=vfat /dev/${TARGET}* | head -n 1)
-  [ -n \"\$ESP\" ] || { echo '内蔵側の EFI 領域が見つからない' >&2; exit 1; }
-  sudo mount \"\$ESP\" /mnt
+  l=\$(sudo sfdisk -d /dev/${TARGET} 2>/dev/null | grep -E '^/dev/${TARGET}p?1 ')
+  s=\$(echo \"\$l\" | sed 's/.*start= *\([0-9]*\).*/\1/')
+  n=\$(echo \"\$l\" | sed 's/.*size= *\([0-9]*\).*/\1/')
+  [ -n \"\$s\" ] && [ -n \"\$n\" ] || { echo '内蔵側のパーティション表に partition 1 が無い' >&2; exit 1; }
+  sudo mount -o loop,offset=\$((s * 512)),sizelimit=\$((n * 512)) /dev/${TARGET} /mnt
   sudo tee /mnt/node.conf >/dev/null
   ls -l /mnt/node.conf
   sudo umount /mnt
