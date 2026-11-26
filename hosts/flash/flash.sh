@@ -89,20 +89,31 @@ fi
 CONF_FILE=$(umask 077 && mktemp "${TMPDIR:-/tmp}/node.conf.XXXXXX")
 emit_conf > "$CONF_FILE"
 
-# macOS では boot パーティションをマウントして自動で流し込む
-INJECTED=""
+# macOS では boot パーティションをマウントして自動で流し込む。
+# dd 直後は macOS が新しいパーティション表を読み直す前のことがあり、1回の
+# diskutil mount では失敗する (x86 の GPT image で node.conf が入らず、firstboot が
+# "node.conf not found" で何もしなかった、2026-11-26)。数回待って試し、書けたかを
+# 中身の比較で確かめ、だめなら黙って進まずに止める
 if [ "$(uname)" = "Darwin" ]; then
-  diskutil mount "${DEV}s1" >/dev/null 2>&1 || true
-  MP=$(diskutil info "${DEV}s1" 2>/dev/null | sed -n 's/^[[:space:]]*Mount Point:[[:space:]]*//p')
-  if [ -n "$MP" ] && [ -d "$MP" ]; then
-    cp "$CONF_FILE" "$MP/node.conf"
+  MP=""
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    diskutil mount "${DEV}s1" >/dev/null 2>&1 || true
+    MP=$(diskutil info "${DEV}s1" 2>/dev/null | sed -n 's/^[[:space:]]*Mount Point:[[:space:]]*//p')
+    [ -n "$MP" ] && [ -d "$MP" ] && break
+    MP=""
+    sleep 3
+  done
+  if [ -n "$MP" ] && cp "$CONF_FILE" "$MP/node.conf" && cmp -s "$CONF_FILE" "$MP/node.conf"; then
     echo "node.conf を $MP に書き込みました"
-    INJECTED=1
+    rm -f "$CONF_FILE"
     diskutil eject "$DEV" >/dev/null 2>&1 || true
+  else
+    rm -f "$CONF_FILE"
+    echo "node.conf を書き込めなかった (${DEV}s1 をマウントできない)。" >&2
+    echo "USB を挿し直してから、node.conf だけ書き直す:" >&2
+    echo "  ./hosts/flash/flash.sh --node ${NODE} --device ${DEV} --inject-only" >&2
+    exit 1
   fi
-fi
-if [ -n "$INJECTED" ]; then
-  rm -f "$CONF_FILE"
 else
   echo "node.conf を boot パーティションへ手動コピーしてください (FAT なので Finder/エクスプローラ可):"
   echo "  cp $CONF_FILE <BOOTボリューム>/node.conf && rm $CONF_FILE"
