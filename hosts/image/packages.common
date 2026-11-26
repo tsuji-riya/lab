@@ -22,6 +22,8 @@ smartmontools
 util-linux
 wireless-regdb
 # 以下は現行に無い新規分 (硬化と管理用)
+# Ansible の実行に必須。現状は nfs-utils の依存で偶然入っているだけなので明示する
+python3
 sudo
 nftables
 ca-certificates
