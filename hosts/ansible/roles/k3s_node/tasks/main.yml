@@ -157,3 +157,14 @@
       delegate_to: "{{ k3s_node_join_host }}"
       when: k3s_node_disk_annotation.stdout != disks_config
       changed_when: true
+  rescue:
+    # 登録されないときの理由は server ではなく、その台自身の k3s ログにある
+    # (node7 で k3s-agent が起動中のまま登録されず、理由が見えなかった)
+    - name: Show this node's k3s log
+      ansible.builtin.command: tail -n 60 {{ k3s_node_log }}
+      changed_when: false
+      failed_when: false
+      register: k3s_node_reg_log
+    - name: Fail with this node's k3s log
+      ansible.builtin.fail:
+        msg: "{{ k3s_node_reg_log.stdout_lines | default([]) }}"
