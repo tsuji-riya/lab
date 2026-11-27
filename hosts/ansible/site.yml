@@ -7,6 +7,8 @@
   hosts: servers
   serial: 1
   order: inventory
+  # facts は service モジュールが使う service_mgr しか要らない (min に含まれる)
+  gather_subset: [min]
   roles:
     - base
     - firewall
@@ -14,6 +16,7 @@
 
 - name: Converge agents
   hosts: agents
+  gather_subset: [min]
   roles:
     - base
     - firewall

@@ -53,13 +53,26 @@
   loop:
     - cgroups
     - local
-- name: Tmpfs mounts (全台実測で同一)
+# サイズは上限で、使った分だけメモリを食う。/var/log は Pod のログ
+# (/var/log/pods) と k3s.log も受けるので 64m では溢れうる
+- name: Tmpfs mounts
   ansible.builtin.blockinfile:
     path: /etc/fstab
     marker: "# {mark} lab-hosts tmpfs"
     block: |
-      tmpfs  /tmp      tmpfs  nosuid,nodev,noatime,size=256m,mode=1777  0 0
-      tmpfs  /var/log  tmpfs  nosuid,nodev,noatime,size=64m,mode=0755   0 0
+      tmpfs  /tmp      tmpfs  nosuid,nodev,noatime,size=512m,mode=1777  0 0
+      tmpfs  /var/log  tmpfs  nosuid,nodev,noatime,size=256m,mode=0755  0 0
+  notify: Resize tmpfs
+# SSD の書き込み削減: atime 更新を止め (noatime)、タイムスタンプだけの inode 更新は
+# メモリに溜める (lazytime。etcd の fdatasync でも inode を書かずに済む)。
+# 既存の relatime 等は消さずに足す (noatime はカーネル側で relatime より優先)
+- name: Root fs is noatime,lazytime
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^(\S+\s+/\s+\S+\s+)(?!\S*\b{{ item }}\b)(\S+)'
+    replace: '\1\2,{{ item }}'
+  loop: [noatime, lazytime]
+  notify: Remount root
 - name: "Extra mounts (台固有: host_vars で定義)"
   ansible.posix.mount:
     path: "{{ item.path }}"

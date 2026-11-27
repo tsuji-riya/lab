@@ -69,6 +69,10 @@ if [ "$(uname -m)" = x86_64 ]; then
     UUID=*) ;;
     *) echo "root の UUID が fstab から引けない: $ROOT_SPEC" >&2; exit 1 ;;
   esac
+  # alpine-make-vm-image は root を relatime で書く。SSD の書き込み削減のため
+  # Pi (build-rpi.sh) と同じ noatime,lazytime に揃える
+  sed -i -E 's|^(UUID=[^[:space:]]+[[:space:]]+/[[:space:]]+[^[:space:]]+[[:space:]]+)relatime([[:space:]])|\1noatime,lazytime\2|' /etc/fstab
+  grep -Eq '^UUID=[^[:space:]]+[[:space:]]+/[[:space:]]+[^[:space:]]+[[:space:]]+noatime,lazytime[[:space:]]' /etc/fstab || { echo "root の fstab に noatime を入れられない" >&2; exit 1; }
   # build-x86.sh の --initfs-features (nvme/ata/usb) で initramfs を作り直す。
   # カーネル導入時点の initramfs は機能設定より前に作られている
   mkinitfs "$(ls /lib/modules)"

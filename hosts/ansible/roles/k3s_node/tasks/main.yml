@@ -14,33 +14,35 @@
     path: /usr/local/bin/k3s
   register: k3s_node_bin
 
-- name: Find servers already running k3s
-  ansible.builtin.stat:
-    path: /var/lib/rancher/k3s/server/token
-  delegate_to: "{{ item }}"
-  loop: "{{ groups['servers'] | difference([inventory_hostname]) }}"
-  register: k3s_node_server_state
-  ignore_unreachable: true
-
-- name: Remember the running servers
-  ansible.builtin.set_fact:
-    k3s_node_members: >-
-      {{ k3s_node_server_state.results
-         | selectattr('stat', 'defined')
-         | selectattr('stat.exists')
-         | map(attribute='item') | list }}
-
-# delegate_to は when より先に評価されるため、空リストでも安全な値にしておく
-# (members[0] だと server が1台も居ない初回に when で飛ばす前に落ちる)。
-# 同じ set_fact 内では直前に設定した変数を参照できないので別タスクにする
-- name: Pick the server to delegate cluster operations to
-  ansible.builtin.set_fact:
-    k3s_node_join_host: >-
-      {{ k3s_node_members | first | default(inventory_hostname) }}
-
 - name: Install k3s on a new node
   when: not k3s_node_bin.stat.exists
   block:
+    # join 先探しは導入時だけ要る。導入済みの台で毎回やると他の server へ
+    # トンネルを張り直すぶん 1台 10秒前後かかる
+    - name: Find servers already running k3s
+      ansible.builtin.stat:
+        path: /var/lib/rancher/k3s/server/token
+      delegate_to: "{{ item }}"
+      loop: "{{ groups['servers'] | difference([inventory_hostname]) }}"
+      register: k3s_node_server_state
+      ignore_unreachable: true
+
+    - name: Remember the running servers
+      ansible.builtin.set_fact:
+        k3s_node_members: >-
+          {{ k3s_node_server_state.results
+             | selectattr('stat', 'defined')
+             | selectattr('stat.exists')
+             | map(attribute='item') | list }}
+
+    # delegate_to は when より先に評価されるため、空リストでも安全な値にしておく
+    # (members[0] だと server が1台も居ない初回に when で飛ばす前に落ちる)。
+    # 同じ set_fact 内では直前に設定した変数を参照できないので別タスクにする
+    - name: Pick the server to delegate cluster operations to
+      ansible.builtin.set_fact:
+        k3s_node_join_host: >-
+          {{ k3s_node_members | first | default(inventory_hostname) }}
+
     - name: Require the cluster token
       ansible.builtin.assert:
         that: k3s_token | length > 0
@@ -62,7 +64,8 @@
         k3s kubectl delete node {{ inventory_hostname }} --ignore-not-found
         k3s kubectl -n kube-system delete secret \
           {{ inventory_hostname }}.node-password.k3s --ignore-not-found
-      delegate_to: "{{ k3s_node_join_host }}"
+      # 導入済みの台ではブロックごと飛ぶが、delegate_to は when より先に評価される
+      delegate_to: "{{ k3s_node_join_host | default(inventory_hostname) }}"
       when: k3s_node_members | length > 0
       register: k3s_node_forget
       changed_when: "'deleted' in k3s_node_forget.stdout"

@@ -136,7 +136,7 @@ overlay と Ansible base ロールに取り込み済み。
 - Pi の cmdline: `usb-storage.quirks=7825:a2a4:u` (USB-SATA の UAS 無効化) と
   `cgroup_enable=cpuset cgroup_enable=memory cgroup_memory=1`
   (ファームウェア既定の cgroup_disable=memory を後勝ちで打ち消す)
-- fstab の tmpfs 2件 (/tmp 256m、/var/log 64m)
+- fstab の tmpfs 2件 (実測は /tmp 256m、/var/log 64m。現在は /tmp 512m、/var/log 256m に拡大)
 - 台固有: 旧 image では node1 のみ cloudflared 常駐 (廃止済みの旧経路
   `lab-k3s-api.riya.work`)。新しい image では
   server 3台が Terraform 管理の `k3s-api.riya.work` のコネクタ

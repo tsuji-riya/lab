@@ -84,7 +84,7 @@ for d in dev proc sys; do sudo umount "mnt-root/$d"; done
 # fstab: boot は FAT、root は ext4 (USB SSD 前提でデバイス名は UUID でなく LABEL)
 sudo mkdir -p mnt-root/boot
 cat <<'EOF' | sudo tee mnt-root/etc/fstab >/dev/null
-LABEL=root  /      ext4  defaults,noatime  0 1
+LABEL=root  /      ext4  defaults,noatime,lazytime  0 1
 LABEL=LABBOOT /boot vfat  defaults          0 2
 EOF
 

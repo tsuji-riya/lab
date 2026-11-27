@@ -6,3 +6,14 @@
   ansible.builtin.service:
     name: sshd
     state: reloaded
+# remount は fstab の値 (root の noatime,lazytime / tmpfs のサイズ) を読み直す。
+# tmpfs は中身を保ったままサイズを変えられる
+- name: Remount root
+  ansible.posix.mount:
+    path: /
+    state: remounted
+- name: Resize tmpfs
+  ansible.posix.mount:
+    path: "{{ item }}"
+    state: remounted
+  loop: [/tmp, /var/log]
