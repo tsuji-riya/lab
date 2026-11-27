@@ -130,7 +130,7 @@ flowchart LR
 | Workflow | トリガー | やること |
 | --- | --- | --- |
 | `deploy` | PR / `main` push | `terraform plan` → `apply` → Flux 適用 |
-| `image-scan` | PR / push / 毎週月曜 | Trivy でコンテナ image をスキャン |
+| `image-scan` | PR / push / 毎日 | Trivy でコンテナ image をスキャン |
 | `Build host images` | `hosts/**` の PR / `hosts-v*` タグ / 手動 | Alpine image をビルドして Release |
 | `Host ops` | 手動のみ (要承認) | Tunnel 経由 SSH でパッケージ更新 / 再起動 |
 | `Host converge` | `hosts/` の merge / 6時間ごと / 手動 | Ansible で全台を収束。クラスタの証明書が変わったら `K8S_*` を更新して `deploy` を起動 (作り直しでも Flux が戻る) |

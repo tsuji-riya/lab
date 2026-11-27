@@ -2,7 +2,7 @@ name: image-scan
 
 # このリポジトリで動くコンテナイメージの脆弱性を Trivy で定期スキャンし、
 # 結果を Security タブ (code scanning) に上げる。マニフェスト変更時の PR でも回すが、
-# SARIF のアップロードは main への push と週次実行だけにする (下の upload ステップ参照)
+# SARIF のアップロードは main への push と定期実行だけにする (下の upload ステップ参照)
 on:
   push:
     branches: [main]
@@ -10,8 +10,8 @@ on:
   pull_request:
     paths: [apps/**, infrastructure/**, fluxcd/**, .github/workflows/image-scan.yaml]
   schedule:
-    # 月曜 03:00 JST
-    - cron: "0 18 * * 0"
+    # 毎日 03:00 JST
+    - cron: "0 18 * * *"
   workflow_dispatch:
 
 permissions:
