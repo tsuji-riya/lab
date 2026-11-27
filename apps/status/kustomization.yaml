@@ -11,7 +11,3 @@ configMapGenerator:
   namespace: status
   files:
   - gatus.yaml
-- name: caddy-config
-  namespace: status
-  files:
-  - Caddyfile

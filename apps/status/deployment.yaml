@@ -48,10 +48,10 @@ spec:
             httpGet:
               path: /health
               port: 8080
-        # 公開入口。Gatus の API のうち statuses だけを CORS ヘッダ付きで通す
-        - name: caddy
-          image: caddy:2.11.9@sha256:4851e54a46b206517c574821bb5cc67f170d2156041e9fbc4c9193b45e84a75b
-          args: [caddy, run, --config, /etc/caddy/Caddyfile, --adapter, caddyfile]
+        # 公開入口。Gatus の API のうち statuses だけを CORS ヘッダ付きで通す自作プロキシ (apps/status/proxy、scratch・std のみ)。
+        # 初回ビルド後に digest を足して固定する (build-status-proxy の Summary に出る)
+        - name: proxy
+          image: ghcr.io/tsuji-riya/status-proxy:0.1.0
           ports:
             - name: http
               containerPort: 8081
@@ -65,16 +65,9 @@ spec:
           resources:
             requests:
               cpu: 10m
-              memory: 16Mi
+              memory: 4Mi
             limits:
-              memory: 64Mi
-          volumeMounts:
-            - name: caddy-config
-              mountPath: /etc/caddy
-            - name: caddy-state
-              mountPath: /data
-            - name: caddy-state
-              mountPath: /config
+              memory: 32Mi
           readinessProbe:
             httpGet:
               path: /api/v1/endpoints/statuses
@@ -83,8 +76,3 @@ spec:
         - name: config
           configMap:
             name: gatus-config
-        - name: caddy-config
-          configMap:
-            name: caddy-config
-        - name: caddy-state
-          emptyDir: {}
