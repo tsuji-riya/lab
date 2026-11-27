@@ -1,0 +1,10 @@
+# OpenRC の k3s は /var/log (64M の tmpfs) に直接追記し続けるので上限を付ける。
+# supervise-daemon がファイルを開きっぱなしなので copytruncate。
+# compress しない: tmpfs に圧縮ファイルを残す意味が薄く、Vector が読む対象も増える
+/var/log/k3s.log /var/log/k3s-agent.log {
+    size 10M
+    rotate 2
+    copytruncate
+    missingok
+    notifempty
+}
