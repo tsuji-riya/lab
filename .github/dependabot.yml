@@ -21,6 +21,12 @@ updates:
       interval: daily
     cooldown:
       default-days: 3
+  - package-ecosystem: docker
+    directory: /apps/status
+    schedule:
+      interval: daily
+    cooldown:
+      default-days: 3
   # rancher/system-upgrade-controller のイメージ用
   - package-ecosystem: docker
     directory: /infrastructure/system-upgrade-controller

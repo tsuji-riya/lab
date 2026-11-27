@@ -1,8 +1,10 @@
 locals {
-  headlamp_hostname = "headlamp.riya.work"
-  logs_hostname     = "logs.riya.work"
-  anubis_hostname   = "anubis.riya.work"
-  fantasy_hostname  = "fantasy.riya.work"
+  headlamp_hostname   = "headlamp.riya.work"
+  logs_hostname       = "logs.riya.work"
+  anubis_hostname     = "anubis.riya.work"
+  fantasy_hostname    = "fantasy.riya.work"
+  status_api_hostname = "status-api.riya.work"
+  status_hostname     = "status.riya.work"
 }
 
 resource "random_bytes" "tunnel_secret" {
@@ -36,6 +38,12 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "k3s" {
       {
         hostname = local.fantasy_hostname
         service  = "http://fantasy.fantasy.svc.cluster.local:80"
+      },
+      {
+        # status.riya.work (GitHub Pages) が読む API のうち、この 1 パスだけを外に出す
+        hostname = local.status_api_hostname
+        path     = "^/api/v1/endpoints/statuses$"
+        service  = "http://status.status.svc.cluster.local:80"
       },
       {
         service = "http_status:404"

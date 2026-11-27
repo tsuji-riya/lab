@@ -35,3 +35,23 @@ resource "cloudflare_dns_record" "fantasy" {
   proxied = true
   ttl     = 1
 }
+
+# 公開 API (statuses の 1 パスだけ)。Access なしで、CORS は status_cors で付ける
+resource "cloudflare_dns_record" "status_api" {
+  zone_id = var.zone_id
+  name    = local.status_api_hostname
+  type    = "CNAME"
+  content = "${cloudflare_zero_trust_tunnel_cloudflared.k3s.id}.cfargotunnel.com"
+  proxied = true
+  ttl     = 1
+}
+
+# status.riya.work は GitHub Pages。証明書の発行に GitHub へ直接届く必要があるので proxied = false
+resource "cloudflare_dns_record" "status" {
+  zone_id = var.zone_id
+  name    = local.status_hostname
+  type    = "CNAME"
+  content = "tsuji-riya.github.io"
+  proxied = false
+  ttl     = 1
+}
