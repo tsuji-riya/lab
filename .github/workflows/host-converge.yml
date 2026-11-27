@@ -82,25 +82,48 @@ jobs:
           ANSIBLE_FORCE_COLOR: "1"
         # 台ごとに別々に流す。1回でまとめて流すと、serial: 1 の server で1台でも
         # 届かない台 (電源断・焼き直し待ち) があった時点で Ansible が残りの台
-        # (新しく焼いた agent を含む) を処理せずに打ち切る。順序は inventory 順
-        # (node1 → … → node7) なので、server を先に収束させる性質は変わらない
+        # (新しく焼いた agent を含む) を処理せずに打ち切る。
+        # server は inventory 順 (node1 → node3) に1台ずつ (cluster-init と join の
+        # 順序のため)。agent は server の後に並列で流す (互いに依存しない)
         run: |
-          hosts=$(ansible all -i inventory/cloudflare.yml --list-hosts \
-            --limit "${LIMIT}" | tail -n +2 | awk '{print $1}')
+          list() {
+            ansible all -i inventory/cloudflare.yml --list-hosts --limit "$1" \
+              2>/dev/null | tail -n +2 | awk '{print $1}'
+          }
+          # LIMIT のうち group に属する台 (inventory 順)。"servers:&${LIMIT}" だと
+          # LIMIT が "node1,node5" のとき & が node1 にしか掛からない
+          pick() { list "$1" | grep -Fx -f <(list "${LIMIT}") || true; }
+          converge() {
+            ansible-playbook site.yml -i inventory/cloudflare.yml --limit "$1" --diff
+          }
+          # ssh は ProxyCommand の失敗理由を出さない ("Connection closed by
+          # UNKNOWN port 65535" だけ) ので、トンネル経路を直接叩いて理由を出す
+          diagnose() {
+            ah=$(ansible-inventory -i inventory/cloudflare.yml --host "$1" \
+              | jq -r .ansible_host)
+            echo "--- ${1}: cloudflared access ssh --hostname ${ah} の応答"
+            timeout 15 cloudflared access ssh --hostname "$ah" \
+              < /dev/null 2>&1 | tail -n 5 || true
+          }
           failed=""
-          for h in $hosts; do
+          for h in $(pick servers); do
             echo "::group::${h}"
-            if ! ansible-playbook site.yml -i inventory/cloudflare.yml \
-              --limit "$h" --diff; then
-              failed="${failed} ${h}"
-              # ssh は ProxyCommand の失敗理由を出さない ("Connection closed by
-              # UNKNOWN port 65535" だけ) ので、トンネル経路を直接叩いて理由を出す
-              ah=$(ansible-inventory -i inventory/cloudflare.yml --host "$h" \
-                | jq -r .ansible_host)
-              echo "--- ${h}: cloudflared access ssh --hostname ${ah} の応答"
-              timeout 15 cloudflared access ssh --hostname "$ah" \
-                < /dev/null 2>&1 | tail -n 5 || true
-            fi
+            converge "$h" || { failed="${failed} ${h}"; diagnose "$h"; }
+            echo "::endgroup::"
+          done
+          logs=$(mktemp -d)
+          pids=""
+          for h in $(pick agents); do
+            converge "$h" > "${logs}/${h}.log" 2>&1 &
+            pids="${pids} $!:${h}"
+          done
+          for p in $pids; do
+            h=${p#*:}
+            echo "::group::${h}"
+            rc=0
+            wait "${p%%:*}" || rc=$?
+            cat "${logs}/${h}.log"
+            [ "$rc" = 0 ] || { failed="${failed} ${h}"; diagnose "$h"; }
             echo "::endgroup::"
           done
           if [ -n "$failed" ]; then
