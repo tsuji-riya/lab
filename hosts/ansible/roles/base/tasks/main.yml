@@ -63,6 +63,13 @@
       tmpfs  /tmp      tmpfs  nosuid,nodev,noatime,size=512m,mode=1777  0 0
       tmpfs  /var/log  tmpfs  nosuid,nodev,noatime,size=256m,mode=0755  0 0
   notify: Resize tmpfs
+# fstab にあっても未マウントの台がある (2026-11-27: node2-6)。稼働中の /var/log に
+# 被せると開いているログ (k3s, Pod) が隠れるので、マウントは再起動に任せ、
+# 既にマウント済みの台だけ handler でサイズを変える
+- name: Current tmpfs mounts
+  ansible.builtin.command: findmnt -rn -t tmpfs -o TARGET
+  register: base_tmpfs
+  changed_when: false
 # SSD の書き込み削減: atime 更新を止め (noatime)、タイムスタンプだけの inode 更新は
 # メモリに溜める (lazytime。etcd の fdatasync でも inode を書かずに済む)。
 # 既存の relatime 等は消さずに足す (noatime はカーネル側で relatime より優先)

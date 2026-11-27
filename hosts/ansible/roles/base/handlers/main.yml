@@ -17,3 +17,4 @@
     path: "{{ item }}"
     state: remounted
   loop: [/tmp, /var/log]
+  when: item in base_tmpfs.stdout_lines
