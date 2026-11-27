@@ -13,7 +13,7 @@ token_file="/etc/cloudflared/${RC_SVCNAME}.token"
 command_args="tunnel --no-autoupdate run --token-file ${token_file}"
 command_background="yes"
 pidfile="/run/${RC_SVCNAME}.pid"
-# /var/log は 64M の tmpfs。ファイルに直接吐くと無制限に伸びるので syslog
+# /var/log は 256M の tmpfs。ファイルに直接吐くと無制限に伸びるので syslog
 # (busybox syslogd がサイズでローテートする) に流す
 output_logger="logger -t ${RC_SVCNAME} -p daemon.info"
 error_logger="logger -t ${RC_SVCNAME} -p daemon.err"

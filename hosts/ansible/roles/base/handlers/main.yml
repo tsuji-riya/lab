@@ -9,3 +9,8 @@
 - name: Remount root
   ansible.builtin.command: mount -o remount,noatime,lazytime /
   changed_when: true
+# tmpfs は中身を保ったままサイズを変えられる。remount は fstab の値を読み直す
+- name: Resize tmpfs
+  ansible.builtin.command: "mount -o remount {{ item }}"
+  loop: [/tmp, /var/log]
+  changed_when: true
