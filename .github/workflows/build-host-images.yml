@@ -60,6 +60,7 @@ jobs:
           ansible-galaxy collection install -r hosts/ansible/requirements.yml
           (cd hosts/ansible && ansible-lint)
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shopt -s nullglob  # local.d が空でも *.start をリテラルで渡さない
           shellcheck hosts/image/*.sh hosts/flash/*.sh \
             hosts/image/overlay/usr/local/sbin/node-firstboot \
             hosts/image/overlay/etc/init.d/* \
