@@ -63,7 +63,7 @@ spec:
               readOnly: true
         - name: server
           # サイト本体は tsuji-riya/anubis.riya.work でビルドしたイメージ (自作サーバー + 静的ファイル、scratch)
-          image: ghcr.io/tsuji-riya/anubis.riya.work:1.0.5@sha256:b2ac39a34795625ed463d2863a6e45c872e3e0610691dfd580c30b908111bbaa
+          image: ghcr.io/tsuji-riya/anubis.riya.work:1.0.7@sha256:215d9b1334f047b58245bea5e5387cc41f2daed3c5f4b08e5d851f66b9445ed6
           ports:
             - name: web
               containerPort: 8080
