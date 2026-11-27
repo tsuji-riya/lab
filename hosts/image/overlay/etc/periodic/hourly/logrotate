@@ -1,0 +1,3 @@
+#!/bin/sh
+# size 判定なので hourly で回す (daily だと 64M の tmpfs が先に埋まりうる)
+exec /usr/sbin/logrotate /etc/logrotate.conf

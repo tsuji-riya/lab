@@ -45,6 +45,26 @@
     mode: "{{ item.mode }}"
   loop:
     - {path: etc/modules, mode: "0644"}
+- name: Logrotate for k3s logs (overlay と共通)
+  ansible.builtin.command: apk add --no-cache logrotate
+  register: base_apk_logrotate
+  changed_when: "'Installing' in base_apk_logrotate.stdout"
+- name: Logrotate config (overlay と共通)
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../image/overlay/{{ item.path }}"
+    dest: "/{{ item.path }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: etc/logrotate.conf, mode: "0644"}
+    - {path: etc/logrotate.d/k3s, mode: "0644"}
+    - {path: etc/periodic/hourly/logrotate, mode: "0755"}
+- name: Crond enabled (logrotate を hourly で回す)
+  ansible.builtin.service:
+    name: crond
+    enabled: true
+    state: started
 - name: Services for k3s (全台実測で同一)
   ansible.builtin.service:
     name: "{{ item }}"
