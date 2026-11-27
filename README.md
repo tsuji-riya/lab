@@ -133,6 +133,7 @@ flowchart LR
 | `image-scan` | PR / push / 毎週月曜 | Trivy でコンテナ image をスキャン |
 | `Build host images` | `hosts/**` の PR / `hosts-v*` タグ / 手動 | Alpine image をビルドして Release |
 | `Host ops` | 手動のみ (要承認) | Tunnel 経由 SSH でパッケージ更新 / 再起動 |
+| `Host converge` | `hosts/` の merge / 6時間ごと / 手動 | Ansible で全台を収束。クラスタの証明書が変わったら `K8S_*` を更新して `deploy` を起動 (作り直しでも Flux が戻る) |
 | `Host update check` | 毎週月曜 9:00 | k3s / Alpine の新版があればピン更新 PR |
 
 Dependabot はコンテナ image と Actions を担当（Helm chart と Flux 本体は手動）。

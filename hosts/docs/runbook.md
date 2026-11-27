@@ -37,6 +37,12 @@
 あとは Host converge (6時間ごと) が台を見つけて k3s を入れ、join させる。
 急ぐなら Actions の Host converge を手動実行する (`limit` に台名)。
 
+全台作り直しでクラスタの CA が変わっても、人がやることは増えない。Host converge が
+node1 の admin 証明書の変化を見つけて repo シークレット `K8S_*` を書き換え
+(変数 `K8S_CLIENT_CERT_SHA256` で前回と比較)、deploy を起動する。deploy が
+Terraform の Namespace / Secret を作り直し、Flux を入れ直す。k3s による admin
+証明書の年次更新も同じ経路で追従する。
+
 k3s_node ロールの判定:
 - k3s が動いている server が居れば、そこへ join する。焼き直した台が同じ名前で
   戻る場合は、古い Node と node-password の記録を先に消してから join する
