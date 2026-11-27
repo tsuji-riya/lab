@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: status
+  namespace: status
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: status
+  template:
+    metadata:
+      labels:
+        app: status
+    spec:
+      # Kubernetes API を使わないので SA トークンを渡さない
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        # Gatus が gatus.yaml のエンドポイントを 1 分ごとに確認する。履歴はメモリ上だけ (再起動で消える)
+        - name: gatus
+          image: ghcr.io/twin/gatus:v5.38.0@sha256:085ed63da963728965d00a3c78aa6167e3bf135218485b893201758e079e8415
+          env:
+            - name: GATUS_CONFIG_PATH
+              value: /config/gatus.yaml
+          ports:
+            - containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: config
+              mountPath: /config
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+        # 公開入口。Gatus の API のうち statuses だけを CORS ヘッダ付きで通す自作プロキシ (apps/status/proxy、scratch・std のみ)。
+        # 初回ビルド後に digest を足して固定する (build-status-proxy の Summary に出る)
+        - name: proxy
+          image: ghcr.io/tsuji-riya/status-proxy:0.1.0
+          ports:
+            - name: http
+              containerPort: 8081
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 4Mi
+            limits:
+              memory: 32Mi
+          readinessProbe:
+            httpGet:
+              path: /api/v1/endpoints/statuses
+              port: http
+      volumes:
+        - name: config
+          configMap:
+            name: gatus-config

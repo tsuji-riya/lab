@@ -1,0 +1,90 @@
+# status.riya.work が読む監視設定。group はフロント (tsuji-riya/status.riya.work の src/App.tsx) の groups と合わせる。
+# sites の name は素のホスト名にする (フロントが https://<name> のリンクにする)
+storage:
+  type: memory
+
+web:
+  port: 8080
+
+# 公開 API の結果にはエラー文がそのまま載るので、URL・ホスト名は隠す
+endpoints:
+  - name: anubis.riya.work
+    group: sites
+    url: https://anubis.riya.work
+    interval: 1m
+    conditions:
+      - "[STATUS] == 200"
+    ui:
+      hide-url: true
+      hide-hostname: true
+  - name: fantasy.riya.work
+    group: sites
+    url: https://fantasy.riya.work
+    interval: 1m
+    conditions:
+      - "[STATUS] == 200"
+    ui:
+      hide-url: true
+      hide-hostname: true
+  # クラスタ内の Service は他 namespace からの通信を NetworkPolicy が塞いでいるので、
+  # Pod CIDR から許可済みの node の kubelet (10250) と k3s API を TCP で見る
+  - name: k3s API
+    group: cluster
+    url: tcp://kubernetes.default.svc.cluster.local:443
+    interval: 1m
+    conditions:
+      - "[CONNECTED] == true"
+    ui: &ui
+      hide-url: true
+      hide-hostname: true
+      hide-port: true
+      hide-errors: true
+  - name: node1
+    group: cluster
+    url: tcp://192.168.1.10:10250
+    interval: 1m
+    conditions:
+      - "[CONNECTED] == true"
+    ui: *ui
+  - name: node2
+    group: cluster
+    url: tcp://192.168.1.11:10250
+    interval: 1m
+    conditions:
+      - "[CONNECTED] == true"
+    ui: *ui
+  - name: node3
+    group: cluster
+    url: tcp://192.168.1.12:10250
+    interval: 1m
+    conditions:
+      - "[CONNECTED] == true"
+    ui: *ui
+  - name: node4
+    group: cluster
+    url: tcp://192.168.1.13:10250
+    interval: 1m
+    conditions:
+      - "[CONNECTED] == true"
+    ui: *ui
+  - name: node5
+    group: cluster
+    url: tcp://192.168.1.14:10250
+    interval: 1m
+    conditions:
+      - "[CONNECTED] == true"
+    ui: *ui
+  - name: node6
+    group: cluster
+    url: tcp://192.168.1.15:10250
+    interval: 1m
+    conditions:
+      - "[CONNECTED] == true"
+    ui: *ui
+  - name: node7
+    group: cluster
+    url: tcp://192.168.1.16:10250
+    interval: 1m
+    conditions:
+      - "[CONNECTED] == true"
+    ui: *ui

@@ -1,0 +1,39 @@
+name: build-status-proxy
+
+# apps/status/proxy (Rust 製の CORS プロキシ) をテストし、main では ghcr に push する。
+# タグは Cargo.toml の version。コードを変えたら version を上げること (同じタグへの上書きは digest が変わる)
+on:
+  push:
+    branches: [main]
+    paths: [apps/status/proxy/**, .github/workflows/build-status-proxy.yaml]
+  pull_request:
+    paths: [apps/status/proxy/**, .github/workflows/build-status-proxy.yaml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/status/proxy
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - run: cargo test --locked
+
+      - name: Build
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          echo "IMAGE=ghcr.io/tsuji-riya/status-proxy:$version" >> "$GITHUB_ENV"
+          docker build -t "ghcr.io/tsuji-riya/status-proxy:$version" .
+
+      - name: Push
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker push "$IMAGE"
+          echo "pin: \`$(docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE")\`" >> "$GITHUB_STEP_SUMMARY"

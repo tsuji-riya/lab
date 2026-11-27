@@ -72,7 +72,7 @@ flowchart LR
 ```mermaid
 flowchart LR
     infra["infrastructure<br/>cloudflared · SUC"]
-    apps["apps<br/>Headlamp · VictoriaLogs · anubis · fantasy"]
+    apps["apps<br/>Headlamp · VictoriaLogs · anubis · fantasy · Gatus"]
     up["k3s-upgrade<br/>k3s / Alpine の Plan"]
     infra --> apps
     infra --> up
@@ -85,6 +85,7 @@ flowchart LR
 | 🔦 UI | Headlamp | chart `0.46.0` | 閲覧専用 |
 | 📜 ログ | VictoriaLogs + Vector | chart `0.13.12` | 全ノードのログを収集 |
 | 🎮 サイト | anubis | Anubis `v1.28.2` | Anubis ちゃんが無限に出る ([repo](https://github.com/tsuji-riya/anubis.riya.work)) |
+| 📊 監視 | Gatus | `v5.38.0` | [status.riya.work](https://status.riya.work) (GitHub Pages、[repo](https://github.com/tsuji-riya/status.riya.work)) が 1 分ごとに API を読む。履歴はメモリのみ |
 | 🎮 サイト | fantasy | `1.0.18` | ブラウザで Fantasy Zone、ROM は手元から ([repo](https://github.com/tsuji-riya/fantasy.riya.work)) |
 
 ---
@@ -97,6 +98,8 @@ flowchart LR
 | `logs.riya.work` | VictoriaLogs | 🔒 Access `owner-only` |
 | `anubis.riya.work` | anubis | 🌍 公開 |
 | `fantasy.riya.work` | fantasy | 🌍 公開 |
+| `status.riya.work` | ステータスページ (GitHub Pages) | 🌍 公開 |
+| `status-api.riya.work` | Gatus の `statuses` API 1 パスだけ (自作プロキシが CORS を付ける) | 🌍 公開 |
 | `k3s-api.riya.work` | k3s API `:6443` | 🤖 CI (`host-ops-ci`) / 🔒 `owner-only` |
 | `ssh-node{1..7}.riya.work` | 各ノードの sshd | 🤖 CI (`host-ops-ci`) / 🔒 `owner-only` |
 
