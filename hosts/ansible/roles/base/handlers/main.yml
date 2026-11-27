@@ -6,3 +6,6 @@
   ansible.builtin.service:
     name: sshd
     state: reloaded
+- name: Remount root
+  ansible.builtin.command: mount -o remount,noatime,lazytime /
+  changed_when: true
