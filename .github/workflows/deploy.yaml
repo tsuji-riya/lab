@@ -28,6 +28,8 @@ env:
 
 jobs:
   deploy:
+    # Dependabot の PR には Actions のシークレットが渡らず API にも R2 にも届かない
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     defaults:
       run:

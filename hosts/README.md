@@ -137,8 +137,8 @@ overlay と Ansible base ロールに取り込み済み。
   `cgroup_enable=cpuset cgroup_enable=memory cgroup_memory=1`
   (ファームウェア既定の cgroup_disable=memory を後勝ちで打ち消す)
 - fstab の tmpfs 2件 (/tmp 256m、/var/log 64m)
-- 台固有: node1 のみ cloudflared 常駐 (CI から k3s API への旧経路
-  `lab-k3s-api.riya.work` と推定。Terraform 管理外)。新しい image では
+- 台固有: 旧 image では node1 のみ cloudflared 常駐 (廃止済みの旧経路
+  `lab-k3s-api.riya.work`)。新しい image では
   server 3台が Terraform 管理の `k3s-api.riya.work` のコネクタ
   (`cf-tunnel.api` サービス) を張るので、どの1台が落ちても CI は API に届く。実測で見えた /var/lib/longhorn-hdd
   マウントは、対象 HDD が既に撤去済みのため取り込まなかった

@@ -3,10 +3,6 @@
 # どの1台が落ちても経路は残る (同一トンネルへの複数コネクタは cloudflared の標準機能)。
 # クラスタ内ではなくホストで張るのは、全台作り直し直後 (クラスタがまだ空で
 # クラスタ内の cloudflared が居ない) でも deploy が API に届くようにするため。
-#
-# 旧経路 lab-k3s-api.riya.work は Terraform 管理外 (手作業) だった。
-# 名前を分けて衝突を避け、CI は新経路を優先して旧経路にフォールバックする
-# (.github/scripts/k3s-api-tunnel.sh)。全台作り直し後に旧経路は削除してよい。
 locals {
   k3s_api_hostname = "k3s-api.riya.work"
 }
