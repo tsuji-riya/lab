@@ -99,7 +99,7 @@ flowchart LR
 | `anubis.riya.work` | anubis | 🌍 公開 |
 | `fantasy.riya.work` | fantasy | 🌍 公開 |
 | `status.riya.work` | ステータスページ (GitHub Pages) | 🌍 公開 |
-| `status-api.riya.work` | Gatus の `statuses` API 1 パスだけ | 🌍 公開 (CORS: `status.riya.work`) |
+| `status-api.riya.work` | Gatus の `statuses` API 1 パスだけ (Caddy が CORS を付ける) | 🌍 公開 |
 | `k3s-api.riya.work` | k3s API `:6443` | 🤖 CI (`host-ops-ci`) / 🔒 `owner-only` |
 | `ssh-node{1..7}.riya.work` | 各ノードの sshd | 🤖 CI (`host-ops-ci`) / 🔒 `owner-only` |
 

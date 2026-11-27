@@ -27,8 +27,7 @@ spec:
             - name: GATUS_CONFIG_PATH
               value: /config/gatus.yaml
           ports:
-            - name: http
-              containerPort: 8080
+            - containerPort: 8080
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -48,8 +47,44 @@ spec:
           readinessProbe:
             httpGet:
               path: /health
+              port: 8080
+        # 公開入口。Gatus の API のうち statuses だけを CORS ヘッダ付きで通す
+        - name: caddy
+          image: caddy:2.11.9@sha256:4851e54a46b206517c574821bb5cc67f170d2156041e9fbc4c9193b45e84a75b
+          args: [caddy, run, --config, /etc/caddy/Caddyfile, --adapter, caddyfile]
+          ports:
+            - name: http
+              containerPort: 8081
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsUser: 65534
+            runAsGroup: 65534
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: caddy-config
+              mountPath: /etc/caddy
+            - name: caddy-state
+              mountPath: /data
+            - name: caddy-state
+              mountPath: /config
+          readinessProbe:
+            httpGet:
+              path: /api/v1/endpoints/statuses
               port: http
       volumes:
         - name: config
           configMap:
             name: gatus-config
+        - name: caddy-config
+          configMap:
+            name: caddy-config
+        - name: caddy-state
+          emptyDir: {}

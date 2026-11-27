@@ -1,0 +1,13 @@
+# Gatus は CORS ヘッダを出さないので、同じ Pod の Caddy が statuses の 1 パスだけ中継してヘッダを付ける
+{
+	admin off
+	auto_https off
+}
+
+:8081 {
+	handle /api/v1/endpoints/statuses {
+		header Access-Control-Allow-Origin https://status.riya.work
+		reverse_proxy localhost:8080
+	}
+	respond 404
+}

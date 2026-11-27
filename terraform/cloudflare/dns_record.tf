@@ -36,7 +36,7 @@ resource "cloudflare_dns_record" "fantasy" {
   ttl     = 1
 }
 
-# 公開 API (statuses の 1 パスだけ)。Access なしで、CORS は status_cors で付ける
+# 公開 API (statuses の 1 パスだけ)。Access なしで、CORS は Pod 内の Caddy が付ける
 resource "cloudflare_dns_record" "status_api" {
   zone_id = var.zone_id
   name    = local.status_api_hostname
