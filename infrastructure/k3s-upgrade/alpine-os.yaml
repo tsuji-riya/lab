@@ -125,4 +125,8 @@ spec:
             - alpine-os
             - --namespace=system-upgrade
             - --type=merge
+            # 既定の field manager (kubectl-patch) だと、Flux が kustomization を適用する
+            # たびに kubectl 系の手動変更として version を消し、実行中の Plan が止まる
+            # (2026-11-27: node3 の後で "missing channel and version"、node6 が未処理)
+            - --field-manager=alpine-os-trigger
             - --patch={"spec":{"version":"$(JOB_NAME)"}}
