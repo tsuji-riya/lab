@@ -97,7 +97,7 @@ flowchart LR
 | `logs.riya.work` | VictoriaLogs | 🔒 Access `owner-only` |
 | `anubis.riya.work` | anubis | 🌍 公開 |
 | `fantasy.riya.work` | fantasy | 🌍 公開 |
-| `lab-k3s-api.riya.work` | k3s API `:6443` | 🤖 CI (サービストークン) |
+| `k3s-api.riya.work` | k3s API `:6443` | 🤖 CI (`host-ops-ci`) / 🔒 `owner-only` |
 | `ssh-node{1..7}.riya.work` | 各ノードの sshd | 🤖 CI (`host-ops-ci`) / 🔒 `owner-only` |
 
 ---
