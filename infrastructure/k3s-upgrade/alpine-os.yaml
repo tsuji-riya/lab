@@ -100,6 +100,10 @@ spec:
           restartPolicy: Never
           securityContext:
             runAsNonRoot: true
+            # イメージの USER は名前 (kubectl) なので kubelet が非 root と確かめられず
+            # CreateContainerConfigError になる。数値で渡す (SUC 本体と同じ nobody)
+            runAsUser: 65534
+            runAsGroup: 65534
             seccompProfile:
               type: RuntimeDefault
           containers:
