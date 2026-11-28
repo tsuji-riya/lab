@@ -1,3 +1,5 @@
+<a href="https://status.riya.work"><img src=".github/assets/status-banner.webp" alt="lab cluster: node1〜node7 のサーバーたちが元気に跳ねているバナー" width="100%"></a>
+
 # 🐱 lab
 
 おうちの k3s クラスタを **ベアメタルから全部コード** で管理するリポジトリ。
