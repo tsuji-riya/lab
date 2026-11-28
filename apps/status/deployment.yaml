@@ -48,7 +48,7 @@ spec:
             httpGet:
               path: /health
               port: 8080
-        # 公開入口。Gatus の API のうち statuses だけを CORS ヘッダ付きで通す自作プロキシ (apps/status/proxy、scratch・std のみ)。
+        # 公開入口。Gatus の API のうち statuses だけを CORS ヘッダ付きで通す自作プロキシ (tsuji-riya/status.riya.work の proxy/、scratch・std のみ)。
         # 初回ビルド後に digest を足して固定する (build-status-proxy の Summary に出る)
         - name: proxy
           image: ghcr.io/tsuji-riya/status-proxy:0.1.0
