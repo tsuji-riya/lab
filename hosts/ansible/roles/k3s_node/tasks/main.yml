@@ -14,6 +14,55 @@
     path: /usr/local/bin/k3s
   register: k3s_node_bin
 
+- name: K3s config directory
+  ansible.builtin.file:
+    path: /etc/rancher/k3s
+    state: directory
+    mode: "0755"
+
+# SSD の書き込み削減 (server のみ。CLI 引数が優先されるので install の引数とは衝突しない)。
+# - etcd: bbolt のコミットを 100ms (既定) → 5s 間隔にまとめる。WAL は毎回 fsync されるので
+#   耐久性は変わらず、落ちても WAL から戻る。
+# - leader election: lease の更新 (既定 2s ごとの etcd 書き込み) を 10s ごとにする。
+#   代償は active が落ちた時の引き継ぎが最大 60s になること
+# shortcut: kube-controller-manager / kube-scheduler 以外の leader election (k3s 本体等) は既定のまま
+- name: K3s server config (write reduction)
+  ansible.builtin.copy:
+    dest: /etc/rancher/k3s/config.yaml
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      etcd-arg:
+        - backend-batch-interval=5s
+      kube-controller-manager-arg:
+        - leader-elect-lease-duration=60s
+        - leader-elect-renew-deadline=40s
+        - leader-elect-retry-period=10s
+      kube-scheduler-arg:
+        - leader-elect-lease-duration=60s
+        - leader-elect-renew-deadline=40s
+        - leader-elect-retry-period=10s
+  when: k3s_node_kind == 'server'
+  register: k3s_node_config
+
+# 新品の台は config を置いてから install するので再起動しない。既存の台だけ、
+# server は serial: 1 で回るので 1台ずつ再起動し、etcd が戻るまで待ってから次へ進む
+- name: Restart k3s to apply the config
+  when: k3s_node_config.changed and k3s_node_bin.stat.exists
+  block:
+    - name: Restart k3s
+      ansible.builtin.service:
+        name: "{{ k3s_node_service }}"
+        state: restarted
+    - name: Wait until the API server and etcd are ready
+      ansible.builtin.command: k3s kubectl get --raw /readyz
+      register: k3s_node_ready
+      until: k3s_node_ready.rc == 0
+      retries: 30
+      delay: 5
+      changed_when: false
+
 - name: Install k3s on a new node
   when: not k3s_node_bin.stat.exists
   block:
@@ -86,12 +135,6 @@
               + ['--node-name', inventory_hostname,
                  '--token-file', '/etc/rancher/k3s/cluster-token'])
              | join(' ') }}
-
-    - name: Token directory
-      ansible.builtin.file:
-        path: /etc/rancher/k3s
-        state: directory
-        mode: "0755"
 
     - name: Place the cluster token (root only)
       ansible.builtin.copy:
