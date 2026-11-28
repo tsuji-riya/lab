@@ -49,9 +49,9 @@ spec:
               path: /health
               port: 8080
         # 公開入口。Gatus の API のうち statuses だけを CORS ヘッダ付きで通す自作プロキシ (tsuji-riya/status.riya.work の proxy/、scratch・std のみ)。
-        # 初回ビルド後に digest を足して固定する (build-status-proxy の Summary に出る)
+        # image は status.riya.work の image ワークフローが 1.0.<実行番号> で作る。以降は Dependabot が digest 込みで上げる
         - name: proxy
-          image: ghcr.io/tsuji-riya/status-proxy:0.1.0
+          image: ghcr.io/tsuji-riya/status.riya.work:1.0.0
           ports:
             - name: http
               containerPort: 8081
