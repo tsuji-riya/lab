@@ -38,11 +38,22 @@
 
   .body { position: relative; border-radius: 18px; border: 3px solid #5b4b8a; box-shadow: 0 5px 0 #5b4b8a33; }
   .mini { width: 92px; height: 96px; background: #fff; }
-  .pi   { width: 76px; height: 78px; background: #ffd1dc; border-radius: 16px; }
-  .pi::before { /* 🍓 の葉っぱ */
-    content: ""; position: absolute; left: 50%; top: -12px; width: 26px; height: 12px; margin-left: -13px;
-    background: #7fd48a; border: 3px solid #5b4b8a; border-radius: 12px 12px 4px 4px;
+  /* ラズベリー: 上が広く下がすぼまった実に、つぶつぶ模様と左右 2 枚の葉 */
+  .pi {
+    width: 82px; height: 88px; border-radius: 50% 50% 50% 50% / 40% 40% 60% 60%;
+    background-color: #f0668f;
+    background-image: radial-gradient(circle at 50% 50%, #ff9ab6 0 4px, transparent 5px);
+    background-size: 16px 14px;
   }
+  .pi::before, .pi::after {
+    content: ""; position: absolute; top: -20px; width: 30px; height: 20px;
+    background: #7fd48a; border: 3px solid #5b4b8a; border-radius: 0 100% 0 100%;
+  }
+  .pi::before { left: 8px;  transform: rotate(-10deg); }
+  .pi::after  { right: 8px; transform: scaleX(-1) rotate(-10deg); }
+  .pi .cheek { background: #ffd1dc; }
+  .pi .leds { left: 50%; transform: translateX(-50%); bottom: 12px; }
+  .pi .led { box-shadow: 0 0 0 2px #fff; }
 
   .face { position: absolute; left: 0; right: 0; top: 30%; display: flex; justify-content: center; gap: 18px; }
   .pi .face { gap: 14px; }
@@ -60,6 +71,25 @@
   .cat { position: absolute; font-size: 34px; right: 44px; bottom: 30px; animation: sway 3s ease-in-out infinite; transform-origin: bottom center; }
   @keyframes sway { 0%,100% { transform: rotate(-8deg) } 50% { transform: rotate(8deg) } }
   .zz { position: absolute; right: 28px; bottom: 78px; font-size: 14px; font-weight: 800; color: #8f7fb8; animation: float 3s ease-in-out infinite; }
+
+  /* 停止ノード: 跳ねずに傾いて灰色、× 目、赤 LED、💤 */
+  .node.down { animation: none; }
+  .node.down .body { transform: rotate(-6deg); }
+  .node.down .mini { background: #e9e6ef; }
+  .node.down .pi { background-color: #b9b2c4; background-image: radial-gradient(circle at 50% 50%, #d3cddd 0 4px, transparent 5px); }
+  .node.down .pi::before, .node.down .pi::after { background: #c3cbc4; }
+  .node.down .eye { width: auto; height: auto; background: none; animation: none; font: 800 16px/1 Inter, sans-serif; color: #3d3160; }
+  .node.down .mouth { height: 0; border-radius: 0; border-bottom-width: 3px; top: 58%; }
+  .node.down .cheek { opacity: 0; }
+  .node.down .led { background: #ff5d73; }
+  .node.down .name { color: #d4547a; }
+  .node .zzz { position: absolute; top: -26px; right: -10px; font-size: 18px; animation: float 3s ease-in-out infinite; }
+  .node { position: relative; }
+
+  .pill.degraded { color: #c98a12; } .pill.degraded .dot, .pill.degraded .dot::after { background: #ffc23d; }
+  .pill.outage   { color: #d43a5a; } .pill.outage .dot,   .pill.outage .dot::after   { background: #ff5d73; }
+  body.outage { background: linear-gradient(135deg, #ffe0e6 0%, #f3e2f5 50%, #e9e6f5 100%); }
+
   @keyframes float { 0% { transform: translate(0,6px); opacity: 0 } 40% { opacity: 1 } 100% { transform: translate(8px,-14px); opacity: 0 } }
 </style>
 
@@ -70,10 +100,10 @@
 <div class="spark" style="left:420px;top:18px;animation-delay:-1.7s;font-size:12px">✦</div>
 
 <div class="title">
-  <h1><span class="emoji">🐱</span> lab cluster</h1>
+  <h1><span class="emoji" id="face">🐱</span> lab cluster</h1>
   <p>k3s · 3 servers + 4 agents</p>
 </div>
-<div class="pill"><span class="dot"></span>all systems purring</div>
+<div class="pill" id="pill"><span class="dot"></span><span id="msg">all systems purring</span></div>
 
 <div class="cat emoji">🐈</div>
 <div class="zz">♪</div>
@@ -82,15 +112,30 @@
 <div class="rack" id="rack"></div>
 
 <script>
+  // ?down=5,6 で止まっているノードを指定。server (node1-3) が 2 台以上落ちたら etcd の quorum 喪失 = 全体障害扱い
+  const down = new Set((new URLSearchParams(location.search).get("down") || "").split(",").filter(Boolean).map(Number));
+  const serversDown = [1, 2, 3].filter((i) => down.has(i)).length;
+  const state = serversDown >= 2 ? "outage" : down.size ? "degraded" : "ok";
+  if (state !== "ok") {
+    document.getElementById("pill").classList.add(state);
+    document.body.classList.toggle("outage", state === "outage");
+    document.getElementById("msg").textContent = state === "outage" ? "cluster is down!"
+      : down.size === 1 ? `node${[...down][0]} is napping` : `${down.size} nodes napping`;
+    if (state === "outage") document.getElementById("face").textContent = "🙀";
+  }
+
   // 7 台を README のノード表どおりに並べる。bounce/blink をずらして順番に動いて見せる
   const rack = document.getElementById("rack");
   for (let i = 1; i <= 7; i++) {
     const pi = i >= 4;
     const d = -(i * 0.21).toFixed(2);
+    const dn = down.has(i);
+    const eye = `<div class="eye" style="animation-delay:${d * 2}s">${dn ? "×" : ""}</div>`;
     rack.insertAdjacentHTML("beforeend", `
-      <div class="node" style="animation-delay:${d}s">
+      <div class="node${dn ? " down" : ""}" style="animation-delay:${d}s">
+        ${dn ? `<div class="zzz emoji" style="animation-delay:${d}s">💤</div>` : ""}
         <div class="body ${pi ? "pi" : "mini"}">
-          <div class="face"><div class="eye" style="animation-delay:${d * 2}s"></div><div class="eye" style="animation-delay:${d * 2}s"></div></div>
+          <div class="face">${eye}${eye}</div>
           <div class="cheek l"></div><div class="cheek r"></div>
           <div class="mouth"></div>
           <div class="leds"><div class="led"></div><div class="led b" style="animation-delay:${d}s"></div><div class="led" style="animation-delay:${d / 2}s"></div></div>
